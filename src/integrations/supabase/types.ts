@@ -14,16 +14,282 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      analytics_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          merchant_id: string | null
+          metadata: Json | null
+          product_id: string | null
+          session_id: string | null
+          user_agent: string | null
+          variant_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          merchant_id?: string | null
+          metadata?: Json | null
+          product_id?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+          variant_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          merchant_id?: string | null
+          metadata?: Json | null
+          product_id?: string | null
+          session_id?: string | null
+          user_agent?: string | null
+          variant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analytics_events_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "analytics_events_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      merchants: {
+        Row: {
+          brand_color: string | null
+          created_at: string
+          id: string
+          logo_url: string | null
+          name: string
+          owner_id: string | null
+          slug: string
+        }
+        Insert: {
+          brand_color?: string | null
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          name: string
+          owner_id?: string | null
+          slug: string
+        }
+        Update: {
+          brand_color?: string | null
+          created_at?: string
+          id?: string
+          logo_url?: string | null
+          name?: string
+          owner_id?: string | null
+          slug?: string
+        }
+        Relationships: []
+      }
+      processing_jobs: {
+        Row: {
+          created_at: string
+          error: string | null
+          id: string
+          input: Json | null
+          merchant_id: string | null
+          output: Json | null
+          product_id: string | null
+          provider: string
+          status: Database["public"]["Enums"]["job_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          input?: Json | null
+          merchant_id?: string | null
+          output?: Json | null
+          product_id?: string | null
+          provider?: string
+          status?: Database["public"]["Enums"]["job_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          id?: string
+          input?: Json | null
+          merchant_id?: string | null
+          output?: Json | null
+          product_id?: string | null
+          provider?: string
+          status?: Database["public"]["Enums"]["job_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "processing_jobs_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "processing_jobs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_variants: {
+        Row: {
+          color_hex: string | null
+          created_at: string
+          id: string
+          model_glb_url: string | null
+          model_usdz_url: string | null
+          name: string
+          product_id: string
+          sort_order: number
+          thumbnail_url: string | null
+        }
+        Insert: {
+          color_hex?: string | null
+          created_at?: string
+          id?: string
+          model_glb_url?: string | null
+          model_usdz_url?: string | null
+          name: string
+          product_id: string
+          sort_order?: number
+          thumbnail_url?: string | null
+        }
+        Update: {
+          color_hex?: string | null
+          created_at?: string
+          id?: string
+          model_glb_url?: string | null
+          model_usdz_url?: string | null
+          name?: string
+          product_id?: string
+          sort_order?: number
+          thumbnail_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_variants_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          buy_url: string | null
+          created_at: string
+          currency: string
+          description: string | null
+          id: string
+          merchant_id: string
+          model_glb_url: string | null
+          model_usdz_url: string | null
+          price_cents: number
+          slug: string
+          status: Database["public"]["Enums"]["product_status"]
+          thumbnail_url: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          buy_url?: string | null
+          created_at?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          merchant_id: string
+          model_glb_url?: string | null
+          model_usdz_url?: string | null
+          price_cents?: number
+          slug: string
+          status?: Database["public"]["Enums"]["product_status"]
+          thumbnail_url?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          buy_url?: string | null
+          created_at?: string
+          currency?: string
+          description?: string | null
+          id?: string
+          merchant_id?: string
+          model_glb_url?: string | null
+          model_usdz_url?: string | null
+          price_cents?: number
+          slug?: string
+          status?: Database["public"]["Enums"]["product_status"]
+          thumbnail_url?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "merchant"
+      job_status: "queued" | "processing" | "optimizing" | "ready" | "failed"
+      product_status: "draft" | "active" | "archived"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +416,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "merchant"],
+      job_status: ["queued", "processing", "optimizing", "ready", "failed"],
+      product_status: ["draft", "active", "archived"],
+    },
   },
 } as const
