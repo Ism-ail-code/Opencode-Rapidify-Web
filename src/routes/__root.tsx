@@ -11,6 +11,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { Toaster } from "sonner";
 
 function NotFoundComponent() {
   return (
@@ -77,19 +78,23 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
-      { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { title: "Rapidify — AR Commerce Platform" },
+      { name: "description", content: "Launch products in AR. Let shoppers view your 3D products in their space, share with QR, and convert with View-in-AR." },
+      { name: "author", content: "Rapidify" },
+      { property: "og:site_name", content: "Rapidify" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
-      { name: "twitter:site", content: "@Lovable" },
     ],
     links: [
       {
         rel: "stylesheet",
         href: appCss,
+      },
+    ],
+    scripts: [
+      {
+        type: "module",
+        src: "https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js",
       },
     ],
   }),
@@ -120,6 +125,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      <Toaster theme="dark" position="top-right" richColors />
     </QueryClientProvider>
   );
 }
