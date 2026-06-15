@@ -1,21 +1,23 @@
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
+declare module "react" {
   namespace JSX {
     interface IntrinsicElements {
-      "model-viewer": React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement> & {
-        src?: string;
-        "ios-src"?: string;
-        ar?: boolean;
-        "ar-modes"?: string;
-        "camera-controls"?: boolean;
-        "auto-rotate"?: boolean;
-        "shadow-intensity"?: string;
-        exposure?: string;
-        poster?: string;
-        loading?: "eager" | "lazy";
-      }, HTMLElement>;
+      "model-viewer": React.DetailedHTMLProps<
+        React.HTMLAttributes<HTMLElement> & {
+          src?: string;
+          "ios-src"?: string;
+          ar?: boolean;
+          "ar-modes"?: string;
+          "camera-controls"?: boolean;
+          "auto-rotate"?: boolean;
+          "shadow-intensity"?: string;
+          exposure?: string;
+          poster?: string;
+          loading?: "eager" | "lazy";
+        },
+        HTMLElement
+      >;
     }
   }
 }
