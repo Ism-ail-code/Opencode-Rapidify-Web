@@ -15,6 +15,7 @@ declare module "react" {
           exposure?: string;
           poster?: string;
           loading?: "eager" | "lazy";
+          alt?: string;
         },
         HTMLElement
       >;
