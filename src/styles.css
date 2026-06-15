@@ -173,3 +173,52 @@
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   &:hover { transform: translateY(-1px); box-shadow: 0 25px 70px -20px oklch(0.66 0.22 295 / 0.6); }
 }
+
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@utility skeleton {
+  background: linear-gradient(90deg, oklch(1 0 0 / 0.06) 25%, oklch(1 0 0 / 0.12) 50%, oklch(1 0 0 / 0.06) 75%);
+  background-size: 200% 100%;
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+  border-radius: var(--radius);
+}
+
+@utility animate-fade-in {
+  animation: fade-in 0.3s ease-out;
+}
+
+@utility scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(1 0 0 / 0.1) transparent;
+  &::-webkit-scrollbar { width: 6px; }
+  &::-webkit-scrollbar-track { background: transparent; }
+  &::-webkit-scrollbar-thumb { background: oklch(1 0 0 / 0.1); border-radius: 3px; }
+}
+
+@utility badge-processing {
+  background: oklch(0.55 0.15 260 / 0.2);
+  color: oklch(0.7 0.15 260);
+}
+
+@utility badge-ready {
+  background: oklch(0.55 0.15 160 / 0.2);
+  color: oklch(0.7 0.15 160);
+}
+
+@utility badge-failed {
+  background: oklch(0.55 0.2 25 / 0.2);
+  color: oklch(0.7 0.2 25);
+}
+
+@utility badge-queued {
+  background: oklch(0.55 0.1 80 / 0.2);
+  color: oklch(0.7 0.1 80);
+}

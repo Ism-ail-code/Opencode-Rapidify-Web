@@ -78,7 +78,6 @@ export const upsertProduct = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((d: unknown) => productSchema.parse(d))
   .handler(async ({ data, context }) => {
-    // ensure merchant exists for this user
     const { data: merchant } = await context.supabase
       .from("merchants").select("id").eq("owner_id", context.userId).maybeSingle();
     let merchantId = merchant?.id;
@@ -114,11 +113,15 @@ export const upsertProduct = createServerFn({ method: "POST" })
       .from("products").insert(payload).select().single();
     if (error) throw error;
 
-    // queue processing job
-    await context.supabase.from("processing_jobs").insert({
-      product_id: ins.id, merchant_id: merchantId, provider: "meshy", status: "queued",
-      input: { source: "manual_upload" },
-    });
+    await context.supabase
+      .from("processing_jobs")
+      .insert({
+        product_id: ins.id, merchant_id: merchantId, provider: "meshy",
+        status: "queued", input: { source: "manual_upload" },
+        retries: 0, max_retries: 5,
+        next_retry_at: new Date(Date.now() + 1000).toISOString(),
+      });
+
     return ins;
   });
 

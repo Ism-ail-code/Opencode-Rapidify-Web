@@ -9,7 +9,9 @@
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "worker": "tsx src/workers/runner.ts",
+    "worker:dev": "tsx watch src/workers/runner.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

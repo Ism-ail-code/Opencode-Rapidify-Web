@@ -2,6 +2,7 @@ import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
+import { logger, config, getObservabilityHeaders } from "./lib/infrastructure";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -30,24 +31,36 @@ async function normalizeCatastrophicSsrResponse(response: Response): Promise<Res
     return response;
   }
 
-  console.error(consumeLastCapturedError() ?? new Error(`h3 swallowed SSR error: ${body}`));
-  return new Response(renderErrorPage(), {
+  logger.error("SSR error swallowed by h3", { body });
+  const originalError = consumeLastCapturedError();
+  if (originalError) logger.error("Original error", { error: originalError instanceof Error ? originalError.message : String(originalError) });
+  return new Response(renderErrorPage(500, "An unexpected error occurred"), {
     status: 500,
-    headers: { "content-type": "text/html; charset=utf-8" },
+    headers: { "content-type": "text/html; charset=utf-8", ...getObservabilityHeaders() },
   });
 }
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
     try {
+      logger.info(`${request.method} ${new URL(request.url).pathname}`, { 
+        url: request.url, 
+        method: request.method 
+      });
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
-      return await normalizeCatastrophicSsrResponse(response);
+      const enhancedHeaders = new Headers(response.headers);
+      Object.entries(getObservabilityHeaders()).forEach(([k, v]) => enhancedHeaders.set(k, v));
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: enhancedHeaders,
+      });
     } catch (error) {
-      console.error(error);
-      return new Response(renderErrorPage(), {
+      logger.error("Unhandled SSR error", { error: error instanceof Error ? error.message : String(error) });
+      return new Response(renderErrorPage(500, "An unexpected error occurred"), {
         status: 500,
-        headers: { "content-type": "text/html; charset=utf-8" },
+        headers: { "content-type": "text/html; charset=utf-8", ...getObservabilityHeaders() },
       });
     }
   },
