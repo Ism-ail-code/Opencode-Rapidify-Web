@@ -24,7 +24,7 @@ export const trackEvent = createServerFn({ method: "POST" })
       event_type: data.event_type,
       session_id: data.session_id ?? null,
       variant_id: data.variant_id ?? null,
-      metadata: (data.metadata ?? {}) as Record<string, unknown>,
+      metadata: (data.metadata ?? {}) as never,
     });
     return { ok: true };
   });
