@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="35eb34d6-5e75-4c5d-9915-335edd462fb1" name="Changes" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/.env" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/.env" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/src/integrations/supabase/client.server.ts" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/src/integrations/supabase/client.server.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/src/lib/analytics.functions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/src/lib/analytics.functions.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/src/lib/config.server.ts" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/src/lib/config.server.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/src/lib/products.functions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/src/lib/products.functions.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/src/routeTree.gen.ts" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/src/routeTree.gen.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/src/routes/auth.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/src/routes/auth.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/src/workers/job-worker.ts" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/src/workers/job-worker.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/src/workers/runner.ts" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/src/workers/runner.ts" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/ar-commerce-suite-new" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 4
+}</component>
+  <component name="ProjectId" id="3FB9FbBpataZDuAyMP8083X19Mp" />
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showExcludedFiles" value="false" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/hp/Documents/STARTUP/Lovable Project 2&quot;
+  }
+}</component>
+  <component name="RunManager">
+    <configuration name="main" type="PythonConfigurationType" factoryName="Python" nameIsGenerated="true">
+      <module name="Lovable Project 2" />
+      <option name="ENV_FILES" value="" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="PARENT_ENVS" value="true" />
+      <envs>
+        <env name="PYTHONUNBUFFERED" value="1" />
+      </envs>
+      <option name="SDK_HOME" value="" />
+      <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+      <option name="IS_MODULE_SDK" value="true" />
+      <option name="ADD_CONTENT_ROOTS" value="true" />
+      <option name="ADD_SOURCE_ROOTS" value="true" />
+      <option name="RUN_TOOL" value="" />
+      <option name="SCRIPT_NAME" value="$PROJECT_DIR$/main.py" />
+      <option name="PARAMETERS" value="" />
+      <option name="SHOW_COMMAND_LINE" value="false" />
+      <option name="EMULATE_TERMINAL" value="false" />
+      <option name="MODULE_MODE" value="false" />
+      <option name="REDIRECT_INPUT" value="false" />
+      <option name="INPUT_FILE" value="" />
+      <method v="2" />
+    </configuration>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-python-sdk-f2b7a9f6281b-6e1f45a539f7-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-253.29346.142" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="35eb34d6-5e75-4c5d-9915-335edd462fb1" name="Changes" comment="" />
+      <created>1781537492845</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1781537492845</updated>
+    </task>
+    <servers />
+  </component>
+</project>

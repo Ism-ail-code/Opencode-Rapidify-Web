@@ -15,7 +15,10 @@ export const getPublicProduct = createServerFn({ method: "GET" })
       .eq("slug", data.slug)
       .eq("status", "active")
       .maybeSingle();
-    if (error) throw error;
+    if (error) {
+      console.error("[getPublicProduct] Query error:", error.message);
+      return null;
+    }
     if (!product) return null;
     const { data: variants } = await supabaseAdmin
       .from("product_variants")
@@ -33,7 +36,10 @@ export const listFeaturedProducts = createServerFn({ method: "GET" }).handler(as
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(12);
-  if (error) throw error;
+  if (error) {
+    console.error("[listFeaturedProducts] Query error:", error.message);
+    return [];
+  }
   return data ?? [];
 });
 

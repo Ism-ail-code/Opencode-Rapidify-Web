@@ -19,8 +19,44 @@ import process from "node:process";
 export function getServerConfig() {
   return {
     nodeEnv: process.env.NODE_ENV,
-    // Add server-only values here, e.g.:
-    //   databaseUrl: process.env.DATABASE_URL,
-    //   stripeSecretKey: process.env.STRIPE_SECRET_KEY,
+
+    // Supabase
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+    supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY,
+
+    // AI providers
+    meshyApiUrl: process.env.MESHY_API_URL ?? "https://api.meshy.ai",
+    meshyApiKey: process.env.MESHY_API_KEY,
+    tripoApiUrl: process.env.TRIPO_API_URL ?? "https://api.tripo3d.ai/v2/openapi",
+    tripoApiKey: process.env.TRIPO_API_KEY,
+
+    // Webhook base URL (for callbacks from AI providers)
+    webhookBaseUrl: process.env.WEBHOOK_BASE_URL ?? process.env.APP_URL ?? "http://localhost:3000",
+
+    // App URL (public, for OG images, deep links, etc.)
+    appUrl: process.env.APP_URL ?? "http://localhost:3000",
   };
+}
+
+/**
+ * Validate that all required environment variables are set.
+ * Call this on server startup to fail fast.
+ */
+export function validateEnv(): void {
+  const required = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_PUBLISHABLE_KEY"] as const;
+  const missing = required.filter((k) => !process.env[k]);
+
+  if (missing.length > 0) {
+    console.error(`[Config] Missing required env vars: ${missing.join(", ")}`);
+    throw new Error(`Missing required environment variables: ${missing.join(", ")}`);
+  }
+
+  // Warn about optional but recommended vars
+  const optional = ["MESHY_API_KEY", "TRIPO_API_KEY", "WEBHOOK_BASE_URL"] as const;
+  for (const key of optional) {
+    if (!process.env[key]) {
+      console.warn(`[Config] ${key} not set — provider ${key.replace("_API_KEY", "").toLowerCase()} will be unavailable`);
+    }
+  }
 }

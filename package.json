@@ -10,8 +10,10 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "worker": "tsx src/workers/runner.ts",
-    "worker:dev": "tsx watch src/workers/runner.ts"
+    "worker": "npx tsx src/workers/runner.ts",
+    "worker:dev": "npx tsx watch src/workers/runner.ts",
+    "worker:cron": "npx tsx src/workers/runner.ts --cron",
+    "setup": "npx tsx src/lib/setup.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -85,6 +87,7 @@
     "globals": "^15.15.0",
     "nitro": "3.0.260603-beta",
     "prettier": "^3.7.3",
+    "tsx": "^4.22.4",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",
     "vite": "^7.3.1"

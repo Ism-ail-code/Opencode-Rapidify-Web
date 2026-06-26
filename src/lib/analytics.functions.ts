@@ -1,7 +1,85 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
+
+export const getAnalyticsSummary = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const cutoff30 = new Date(); cutoff30.setDate(cutoff30.getDate() - 30);
+    const cutoff7 = new Date(); cutoff7.setDate(cutoff7.getDate() - 7);
+    const cutoff1 = new Date(); cutoff1.setDate(cutoff1.getDate() - 1);
+
+    const { data: events } = await context.supabase
+      .from("analytics_events")
+      .select("event_type, created_at")
+      .gte("created_at", cutoff30.toISOString());
+
+    const list = events || [];
+    const counts = { last30: 0, last7: 0, last24h: 0 };
+    const byType: Record<string, number> = {};
+
+    for (const e of list) {
+      const date = new Date(e.created_at);
+      byType[e.event_type] = (byType[e.event_type] || 0) + 1;
+      if (date >= cutoff30) counts.last30++;
+      if (date >= cutoff7) counts.last7++;
+      if (date >= cutoff1) counts.last24h++;
+    }
+
+    return {
+      totalEvents: counts.last30,
+      last7Days: counts.last7,
+      last24Hours: counts.last24h,
+      byType,
+      period: {
+        from: cutoff30.toISOString(),
+        to: new Date().toISOString(),
+      },
+    };
+  });
+
+export const getMyAnalytics = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const fourteenDaysAgo = new Date(); fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    const { data: events } = await context.supabase
+      .from("analytics_events")
+      .select("event_type, created_at")
+      .gte("created_at", fourteenDaysAgo.toISOString())
+      .order("created_at", { ascending: false });
+
+    const list = events || [];
+    const totals: Record<string, number> = { product_view: 0, ar_launch: 0, buy_click: 0 };
+    const dayMap: Record<string, { day: string; views: number; ar: number; buys: number }> = {};
+
+    for (const e of list) {
+      if (e.event_type in totals) totals[e.event_type]++;
+      const dayKey = new Date(e.created_at).toISOString().slice(0, 10);
+      if (!dayMap[dayKey]) dayMap[dayKey] = { day: dayKey, views: 0, ar: 0, buys: 0 };
+      if (e.event_type === "product_view") dayMap[dayKey].views++;
+      if (e.event_type === "ar_launch") dayMap[dayKey].ar++;
+      if (e.event_type === "buy_click") dayMap[dayKey].buys++;
+    }
+
+    return {
+      totals,
+      days: Object.values(dayMap).sort((a, b) => a.day.localeCompare(b.day)),
+      recent: list.slice(0, 20).map(e => ({ event_type: e.event_type, created_at: e.created_at })),
+    };
+  });
+
+export const getMyJobs = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("processing_jobs")
+      .select("*")
+      .eq("merchant_id", context.userId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    if (error) throw error;
+    return data ?? [];
+  });
 
 export const getConversionFunnel = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -24,9 +102,7 @@ export const getConversionFunnel = createServerFn({ method: "GET" })
     };
 
     for (const e of list) {
-      if (e.event_type in funnel) {
-        funnel[e.event_type as keyof typeof funnel]++;
-      }
+      if (e.event_type in funnel) funnel[e.event_type as keyof typeof funnel]++;
     }
 
     const conversionRate = funnel.product_view > 0
@@ -38,69 +114,6 @@ export const getConversionFunnel = createServerFn({ method: "GET" })
       conversionRate: `${conversionRate}%`,
       totalEvents: list.length,
     };
-  });
-
-export const getCohortAnalytics = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({
-    period: z.enum(["daily", "weekly", "monthly"]).default("weekly"),
-    limit: z.number().int().min(1).max(52).default(12),
-  }).parse(d))
-  .handler(async ({ data, context }) => {
-    const { data: events } = await context.supabase
-      .from("analytics_events")
-      .select("event_type, created_at, session_id")
-      .order("created_at", { ascending: false })
-      .limit(10000);
-
-    const list = events || [];
-    const cohorts: Record<string, { views: number; ar: number; buys: number; sessions: Set<string> }> = {};
-    const now = new Date();
-
-    for (const e of list) {
-      const date = new Date(e.created_at);
-      let periodKey: string;
-
-      switch (data.period) {
-        case "daily":
-          periodKey = date.toISOString().slice(0, 10);
-          break;
-        case "weekly": {
-          const startOfWeek = new Date(date);
-          startOfWeek.setDate(date.getDate() - date.getDay());
-          periodKey = startOfWeek.toISOString().slice(0, 10);
-          break;
-        }
-        case "monthly":
-          periodKey = date.toISOString().slice(0, 7);
-          break;
-        default:
-          periodKey = date.toISOString().slice(0, 10);
-      }
-
-      if (!cohorts[periodKey]) {
-        cohorts[periodKey] = { views: 0, ar: 0, buys: 0, sessions: new Set() };
-      }
-
-      const cohort = cohorts[periodKey];
-      if (e.event_type === "product_view") cohort.views++;
-      if (e.event_type === "ar_launch") cohort.ar++;
-      if (e.event_type === "buy_click") cohort.buys++;
-      if (e.session_id) cohort.sessions.add(e.session_id);
-    }
-
-    const sorted = Object.entries(cohorts)
-      .sort(([a], [b]) => b.localeCompare(a))
-      .slice(0, data.limit)
-      .map(([period, stats]) => ({
-        period,
-        views: stats.views,
-        ar: stats.ar,
-        buys: stats.buys,
-        sessions: stats.sessions.size,
-      }));
-
-    return sorted;
   });
 
 export const getPerProductAnalytics = createServerFn({ method: "GET" })
@@ -154,7 +167,7 @@ export const getPerProductAnalytics = createServerFn({ method: "GET" })
 
     const productIds = Object.keys(productStats);
     const { data: products } = productIds.length > 0
-      ? await supabaseAdmin
+      ? await import("@/integrations/supabase/client.server").then(m => m.supabaseAdmin)
           .from("products")
           .select("id, title, slug, thumbnail_url, price_cents, currency")
           .in("id", productIds)
@@ -211,41 +224,5 @@ export const getRealTimeAnalytics = createServerFn({ method: "GET" })
       totalRecent: list.length,
       activeSessions: activeSessions.size,
       timestamp: new Date().toISOString(),
-    };
-  });
-
-export const getAnalyticsSummary = createServerFn({ method: "GET" })
-  .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const cutoff30 = new Date(); cutoff30.setDate(cutoff30.getDate() - 30);
-    const cutoff7 = new Date(); cutoff7.setDate(cutoff7.getDate() - 7);
-    const cutoff1 = new Date(); cutoff1.setDate(cutoff1.getDate() - 1);
-
-    const { data: events } = await context.supabase
-      .from("analytics_events")
-      .select("event_type, created_at")
-      .gte("created_at", cutoff30.toISOString());
-
-    const list = events || [];
-    const counts = { last30: 0, last7: 0, last24h: 0 };
-    const byType: Record<string, number> = {};
-
-    for (const e of list) {
-      const date = new Date(e.created_at);
-      byType[e.event_type] = (byType[e.event_type] || 0) + 1;
-      if (date >= cutoff30) counts.last30++;
-      if (date >= cutoff7) counts.last7++;
-      if (date >= cutoff1) counts.last24h++;
-    }
-
-    return {
-      totalEvents: counts.last30,
-      last7Days: counts.last7,
-      last24Hours: counts.last24h,
-      byType,
-      period: {
-        from: cutoff30.toISOString(),
-        to: new Date().toISOString(),
-      },
     };
   });
