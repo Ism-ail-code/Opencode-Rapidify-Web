@@ -74,6 +74,7 @@ export type Database = {
           name: string
           owner_id: string | null
           slug: string
+          store_domain: string | null
         }
         Insert: {
           brand_color?: string | null
@@ -83,6 +84,7 @@ export type Database = {
           name: string
           owner_id?: string | null
           slug: string
+          store_domain?: string | null
         }
         Update: {
           brand_color?: string | null
@@ -92,6 +94,7 @@ export type Database = {
           name?: string
           owner_id?: string | null
           slug?: string
+          store_domain?: string | null
         }
         Relationships: []
       }
@@ -273,11 +276,279 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          created_at: string
+          corporate_title: string
+          full_name: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          corporate_title?: string
+          created_at?: string
+          full_name?: string
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          corporate_title?: string
+          created_at?: string
+          full_name?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_id_fkey"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      merchant_members: {
+        Row: {
+          created_at: string
+          id: string
+          merchant_id: string
+          role: Database["public"]["Enums"]["merchant_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          merchant_id: string
+          role?: Database["public"]["Enums"]["merchant_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          merchant_id?: string
+          role?: Database["public"]["Enums"]["merchant_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchant_members_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketplace_connections: {
+        Row: {
+          created_at: string
+          id: string
+          merchant_id: string
+          oauth_refresh_hash: string | null
+          oauth_token_hash: string
+          platform: string
+          status: string
+          store_name: string
+          store_url: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          merchant_id: string
+          oauth_refresh_hash?: string | null
+          oauth_token_hash?: string
+          platform: string
+          status?: string
+          store_name?: string
+          store_url?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          merchant_id?: string
+          oauth_refresh_hash?: string | null
+          oauth_token_hash?: string
+          platform?: string
+          status?: string
+          store_name?: string
+          store_url?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketplace_connections_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      external_catalog_items: {
+        Row: {
+          connection_id: string
+          created_at: string
+          currency: string | null
+          description: string | null
+          external_sku: string
+          id: string
+          image_urls: string[] | null
+          mapped_product_id: string | null
+          metadata: import("./types").Json | null
+          price_cents: number | null
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          connection_id: string
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          external_sku: string
+          id?: string
+          image_urls?: string[] | null
+          mapped_product_id?: string | null
+          metadata?: import("./types").Json | null
+          price_cents?: number | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Update: {
+          connection_id?: string
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          external_sku?: string
+          id?: string
+          image_urls?: string[] | null
+          mapped_product_id?: string | null
+          metadata?: import("./types").Json | null
+          price_cents?: number | null
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_catalog_items_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "marketplace_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_catalog_items_mapped_product_id_fkey"
+            columns: ["mapped_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      merchant_credits: {
+        Row: {
+          balance: number
+          created_at: string
+          id: string
+          merchant_id: string
+          updated_at: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          id?: string
+          merchant_id: string
+          updated_at?: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          id?: string
+          merchant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "merchant_credits_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: true
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      credit_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          merchant_id: string
+          metadata: Json | null
+          reason: string
+          ref_id: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          merchant_id: string
+          metadata?: Json | null
+          reason: string
+          ref_id?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          merchant_id?: string
+          metadata?: Json | null
+          reason?: string
+          ref_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "credit_transactions_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      add_credits: {
+        Args: {
+          _merchant_id: string
+          _amount: number
+          _reason: string
+          _ref_id?: string
+        }
+        Returns: void
+      }
+      deduct_credits: {
+        Args: {
+          _merchant_id: string
+          _amount: number
+          _reason: string
+          _ref_id?: string
+        }
+        Returns: boolean
+      }
+      get_user_merchant_id: {
+        Args: {
+          _user_id: string
+        }
+        Returns: string
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -289,6 +560,7 @@ export type Database = {
     Enums: {
       app_role: "admin" | "merchant"
       job_status: "queued" | "processing" | "optimizing" | "ready" | "failed"
+      merchant_role: "admin" | "member" | "owner"
       product_status: "draft" | "active" | "archived"
     }
     CompositeTypes: {
@@ -419,6 +691,7 @@ export const Constants = {
     Enums: {
       app_role: ["admin", "merchant"],
       job_status: ["queued", "processing", "optimizing", "ready", "failed"],
+      merchant_role: ["admin", "member", "owner"],
       product_status: ["draft", "active", "archived"],
     },
   },
