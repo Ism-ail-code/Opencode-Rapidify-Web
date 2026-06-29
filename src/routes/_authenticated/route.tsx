@@ -9,23 +9,19 @@ export const Route = createFileRoute("/_authenticated")({
 
     const user = data.user;
 
-    // Gate 1: Block access until email is verified
     if (!user.email_confirmed_at) {
       throw redirect({ to: "/auth", search: { verify: "pending" } });
     }
 
-    // Gate 2: Check if user has completed onboarding (has a merchant)
-    const { data: member } = await supabase
-      .from("merchant_members")
-      .select("merchant_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (!member) {
-      throw redirect({ to: "/auth/onboarding" });
-    }
-
     return { user };
   },
-  component: () => <Outlet />,
+  component: AuthenticatedLayout,
 });
+
+function AuthenticatedLayout() {
+  return (
+    <div className="relative min-h-screen">
+      <Outlet />
+    </div>
+  );
+}
