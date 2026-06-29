@@ -1,8 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import { SiteHeader } from "@/components/SiteHeader";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { listFeaturedProducts } from "@/lib/products.functions";
 import { ArrowRight, Boxes, BarChart3, Code2, QrCode, Sparkles, Zap } from "lucide-react";
+import { useState } from "react";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 const featuredOpts = queryOptions({
   queryKey: ["featured-products"],
@@ -26,6 +29,61 @@ export const Route = createFileRoute("/")({
 
 function Landing() {
   const { data: featured } = useSuspenseQuery(featuredOpts);
+  const isMobile = useIsMobile();
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
+
+  const pricingTiers = [
+    {
+      name: "Starter",
+      monthlyPrice: "Free",
+      annualPrice: "Free",
+      desc: "Up to 5 products. Perfect for launch.",
+      cta: "Start free",
+    },
+    {
+      name: "Growth",
+      monthlyPrice: "$49/mo",
+      annualPrice: "$39/mo",
+      desc: "Unlimited products. Embed widget. Analytics.",
+      cta: "Start trial",
+      featured: true,
+    },
+    {
+      name: "Enterprise",
+      monthlyPrice: "Custom",
+      annualPrice: "Custom",
+      desc: "SAML SSO, dedicated support, custom AI pipeline.",
+      cta: "Contact sales",
+    },
+  ];
+
+  const faqs = [
+    {
+      q: "What 3D file formats does Rapidify support?",
+      a: "Rapidify supports GLB and USDZ formats. GLB works on Android via Scene Viewer, and USDZ works on iOS via Quick Look. You can upload either or both — we'll deliver the right format to each device automatically.",
+    },
+    {
+      q: "Do I need coding experience to use Rapidify?",
+      a: "No coding required. Simply upload your 3D model, and Rapidify generates a beautiful product page with AR viewing, QR codes, and an embeddable widget. You can copy a one-line snippet to embed on any storefront.",
+    },
+    {
+      q: "How does the AR experience work on mobile?",
+      a: "When a shopper scans the QR code or taps the link on their phone, the AR experience opens natively — Apple Quick Look on iOS and Scene Viewer on Android. No app install needed.",
+    },
+    {
+      q: "Can I embed Rapidify on my existing website?",
+      a: "Yes! Rapidify provides a one-line embed snippet that works with Shopify, WordPress, WooCommerce, Squarespace, or any custom website. The widget is fully responsive and AR-ready.",
+    },
+    {
+      q: "What analytics are available?",
+      a: "The Growth and Enterprise plans include full analytics: product views, AR launch counts, variant switches, time spent in AR, and conversion tracking — all in one dashboard.",
+    },
+    {
+      q: "Can I try before I buy?",
+      a: "Absolutely. The Starter plan is free forever with up to 5 products. The Growth plan also comes with a 14-day free trial, no credit card required.",
+    },
+  ];
+
   return (
     <div>
       <SiteHeader />
@@ -45,9 +103,11 @@ function Landing() {
             <Link to="/auth" className="rounded-lg btn-hero px-6 py-3 text-sm font-medium">
               Start free <ArrowRight className="ml-1 inline h-4 w-4" />
             </Link>
-            <Link to="/p/$slug" params={{ slug: "astronaut" }} className="rounded-lg glass px-6 py-3 text-sm font-medium hover:bg-muted">
-              Try the live demo
-            </Link>
+            {isMobile && (
+              <Link to="/p/$slug" params={{ slug: "astronaut" }} className="rounded-lg glass px-6 py-3 text-sm font-medium hover:bg-muted">
+                Try the live demo
+              </Link>
+            )}
           </div>
         </div>
       </section>
@@ -99,22 +159,45 @@ function Landing() {
       </section>
 
       {/* PRICING */}
-      <section className="mx-auto max-w-6xl px-4 py-20">
+      <section id="pricing" className="mx-auto max-w-6xl px-4 py-20">
         <h2 className="text-center text-3xl font-semibold tracking-tight">Pricing built for growth</h2>
+        <div className="mt-6 flex items-center justify-center gap-2">
+          <button
+            onClick={() => setBillingCycle("monthly")}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition ${billingCycle === "monthly" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Monthly
+          </button>
+          <button
+            onClick={() => setBillingCycle("annual")}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition ${billingCycle === "annual" ? "bg-foreground text-background" : "text-muted-foreground hover:text-foreground"}`}
+          >
+            Annual <span className="ml-1 text-xs opacity-70">Save 20%</span>
+          </button>
+        </div>
         <div className="mt-10 grid gap-4 md:grid-cols-3">
-          {[
-            { name: "Starter", price: "Free", desc: "Up to 5 products. Perfect for launch.", cta: "Start free" },
-            { name: "Growth", price: "$49/mo", desc: "Unlimited products. Embed widget. Analytics.", cta: "Start trial", featured: true },
-            { name: "Enterprise", price: "Custom", desc: "SAML SSO, dedicated support, custom AI pipeline.", cta: "Contact sales" },
-          ].map((t) => (
-            <div key={t.name} className={`rounded-2xl glass p-6 ${t.featured ? "ring-1 ring-primary/50" : ""}`}>
+          {pricingTiers.map((t) => (
+            <div key={t.name} className={`rounded-2xl glass p-6 ${t.featured ? "ring-1 ring-foreground/30" : ""}`}>
               <div className="text-sm text-muted-foreground">{t.name}</div>
-              <div className="mt-2 text-3xl font-semibold">{t.price}</div>
+              <div className="mt-2 text-3xl font-semibold">{billingCycle === "monthly" ? t.monthlyPrice : t.annualPrice}</div>
               <p className="mt-2 text-sm text-muted-foreground">{t.desc}</p>
               <Link to="/auth" className={`mt-6 block rounded-lg py-2.5 text-center text-sm font-medium ${t.featured ? "btn-hero" : "glass hover:bg-muted"}`}>{t.cta}</Link>
             </div>
           ))}
         </div>
+      </section>
+
+      {/* FAQ */}
+      <section id="faq" className="mx-auto max-w-3xl px-4 py-20">
+        <h2 className="text-center text-3xl font-semibold tracking-tight">Frequently asked questions</h2>
+        <Accordion type="single" collapsible className="mt-10">
+          {faqs.map((faq, i) => (
+            <AccordionItem key={i} value={`faq-${i}`}>
+              <AccordionTrigger className="text-left">{faq.q}</AccordionTrigger>
+              <AccordionContent className="text-muted-foreground">{faq.a}</AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
       </section>
 
       <footer className="border-t border-border py-10 text-center text-xs text-muted-foreground">
