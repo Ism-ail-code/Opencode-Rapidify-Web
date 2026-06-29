@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { CREDIT_COSTS } from "@/lib/credits.functions";
 
 const jobStatus = z.enum(["queued", "processing", "optimizing", "ready", "failed"]);
 const jobProvider = z.enum(["meshy", "tripo", "stability"]);
@@ -14,6 +15,23 @@ export const createProcessingJob = createServerFn({ method: "POST" })
     input: z.record(z.unknown()),
   }).parse(d))
   .handler(async ({ data, context }) => {
+    // Deduct credits before queueing
+    const { data: merchant } = await context.supabase
+      .from("merchants")
+      .select("id")
+      .eq("owner_id", context.userId)
+      .maybeSingle();
+
+    if (merchant) {
+      const { data: ok } = await context.supabase.rpc("deduct_credits", {
+        _merchant_id: merchant.id,
+        _amount: CREDIT_COSTS.processing_job,
+        _reason: "processing_job",
+        _ref_id: data.product_id,
+      });
+      if (!ok) throw new Error("Insufficient credits for 3D generation");
+    }
+
     const { data: job, error } = await context.supabase
       .from("processing_jobs")
       .insert({

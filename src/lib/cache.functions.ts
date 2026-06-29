@@ -32,14 +32,27 @@ export const getCachedProducts = createServerFn({ method: "GET" })
 
     const { data, error } = await supabaseAdmin
       .from("products")
-      .select("id, slug, title, thumbnail_url, price_cents, currency, merchants:merchant_id(name, slug)")
+      .select("id, slug, title, thumbnail_url, price_cents, currency, merchant_id")
       .eq("status", "active")
       .order("created_at", { ascending: false })
       .limit(50);
 
     if (error) throw error;
-    setCache(cacheKey, data || [], 30000);
-    return { products: data || [], cached: false };
+
+    // Fetch merchant names separately
+    const items = data || [];
+    if (items.length > 0) {
+      const merchantIds = [...new Set(items.map(p => p.merchant_id))];
+      const { data: merchants } = await supabaseAdmin
+        .from("merchants")
+        .select("id, name, slug")
+        .in("id", merchantIds);
+      const merchantMap = new Map((merchants ?? []).map(m => [m.id, m]));
+      items.forEach(p => { (p as any).merchants = merchantMap.get(p.merchant_id) ?? null; });
+    }
+
+    setCache(cacheKey, items, 30000);
+    return { products: items, cached: false };
   });
 
 export const getCachedPublicProduct = createServerFn({ method: "GET" })
@@ -51,7 +64,7 @@ export const getCachedPublicProduct = createServerFn({ method: "GET" })
 
     const result = await supabaseAdmin
       .from("products")
-      .select("id, slug, title, description, price_cents, currency, thumbnail_url, model_glb_url, model_usdz_url, buy_url, status, merchant_id, merchants:merchant_id(id, name, slug, logo_url, brand_color)")
+      .select("id, slug, title, description, price_cents, currency, thumbnail_url, model_glb_url, model_usdz_url, buy_url, status, merchant_id")
       .eq("slug", data.slug)
       .eq("status", "active")
       .maybeSingle();
@@ -59,13 +72,20 @@ export const getCachedPublicProduct = createServerFn({ method: "GET" })
     if (result.error) throw result.error;
     if (!result.data) return null;
 
+    // Fetch merchant separately
+    const { data: merchant } = await supabaseAdmin
+      .from("merchants")
+      .select("id, name, slug, logo_url, brand_color")
+      .eq("id", result.data.merchant_id)
+      .maybeSingle();
+
     const { data: variants } = await supabaseAdmin
       .from("product_variants")
       .select("id, name, color_hex, model_glb_url, model_usdz_url, thumbnail_url, sort_order")
       .eq("product_id", result.data.id)
       .order("sort_order", { ascending: true });
 
-    const response = { product: result.data, variants: variants ?? [] };
+    const response = { product: { ...result.data, merchants: merchant }, variants: variants ?? [] };
     setCache(cacheKey, response, 15000);
     return response;
   });
