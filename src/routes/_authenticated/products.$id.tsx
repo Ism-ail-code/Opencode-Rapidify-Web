@@ -5,8 +5,10 @@ import { ProductForm } from "@/components/ProductForm";
 import { ARViewer } from "@/components/ARViewer";
 import { useServerFn } from "@tanstack/react-start";
 import { getMyProduct, upsertProduct, deleteProduct } from "@/lib/products.functions";
-import { getProcessingJobs, processJob } from "@/lib/jobs.functions";
+import { getProcessingJobs } from "@/lib/jobs.functions";
 import { toast } from "sonner";
+import { useState } from "react";
+import { Code2, Check, Copy } from "lucide-react";
 
 const opts = (id: string) => queryOptions({ queryKey: ["my-product", id], queryFn: () => getMyProduct({ data: { id } }) });
 
@@ -23,8 +25,7 @@ function EditPage() {
   const save = useServerFn(upsertProduct);
   const del = useServerFn(deleteProduct);
   const product = data.product;
-  
-  // Get processing jobs for this product
+
   const { data: processingJobs } = useSuspenseQuery(
     queryOptions({
       queryKey: ["processing-jobs", id],
@@ -32,24 +33,38 @@ function EditPage() {
       select: (jobs) => jobs.filter(job => job.product_id === id),
     })
   );
-  
+
+  const [embedCopied, setEmbedCopied] = useState(false);
+  const embedSnippet = `<script src="${typeof window !== "undefined" ? window.location.origin : "https://rapidify.app"}/embed.js"\n  data-merchant-slug="${product.slug}"\n  data-mount=".product-buy-button"\n  defer></script>`;
+
+  const copyEmbed = async () => {
+    await navigator.clipboard.writeText(embedSnippet);
+    setEmbedCopied(true);
+    toast.success("Embed snippet copied");
+    setTimeout(() => setEmbedCopied(false), 2000);
+  };
+
   const getJobStatusColor = (status: string) => {
     switch (status) {
-      case "ready": return "bg-emerald-500/20 text-emerald-300";
-      case "failed": return "bg-red-500/20 text-red-300";
-      case "processing": return "bg-blue-500/20 text-blue-300";
-      case "optimizing": return "bg-purple-500/20 text-purple-300";
-      default: return "bg-amber-500/20 text-amber-300";
+      case "ready": return "bg-foreground/10 text-foreground";
+      case "failed": return "bg-red-500/10 text-red-600";
+      case "processing": return "bg-blue-500/10 text-blue-600";
+      case "optimizing": return "bg-purple-500/10 text-purple-600";
+      default: return "bg-muted text-muted-foreground";
     }
   };
 
   if (!product) return <DashboardShell title="Not found"><p className="text-muted-foreground">Product not found.</p></DashboardShell>;
+
   return (
     <DashboardShell title={product.title}>
       <div className="mb-4 flex items-center gap-3">
-        <Link to="/p/$slug" params={{ slug: product.slug }} className="text-sm text-muted-foreground hover:text-foreground">View public page →</Link>
+        <Link to="/p/$slug" params={{ slug: product.slug }} className="text-sm text-muted-foreground hover:text-foreground transition">
+          View public page →
+        </Link>
       </div>
-      <div className="grid gap-6 lg:grid-cols-[1fr_400px]">
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         <ProductForm initial={product} onSubmit={async (d) => {
           try {
             await save({ data: { ...d, id: product.id } });
@@ -63,28 +78,49 @@ function EditPage() {
           toast.success("Deleted");
           navigate({ to: "/products" });
         }} />
-        <div className="rounded-2xl glass p-3">
-          <ARViewer glb={product.model_glb_url} usdz={product.model_usdz_url} poster={product.thumbnail_url} alt={product.title} />
+
+        <div className="space-y-4">
+          {/* AR Preview */}
+          <div className="rounded-xl border border-border bg-card p-2">
+            <ARViewer glb={product.model_glb_url} usdz={product.model_usdz_url} poster={product.thumbnail_url} alt={product.title} />
+          </div>
+
+          {/* Processing Jobs */}
+          {processingJobs.length > 0 && (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Processing Jobs</h3>
+              <ul className="space-y-2">
+                {processingJobs.map(j => (
+                  <li key={j.id} className="flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">{j.provider}</span>
+                      <span className="font-mono text-[10px]">{j.id.slice(0, 8)}</span>
+                    </div>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getJobStatusColor(j.status)}`}>{j.status}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Embed Snippet */}
+          <div className="rounded-xl border border-border bg-card p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Code2 className="h-3.5 w-3.5" /> Embed Code
+              </h3>
+              <button onClick={copyEmbed} className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-foreground/10 transition-colors">
+                {embedCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                {embedCopied ? "Copied" : "Copy"}
+              </button>
+            </div>
+            <pre className="overflow-x-auto rounded-lg bg-muted/50 p-3 text-[10px] leading-relaxed text-muted-foreground">
+              <code>{embedSnippet}</code>
+            </pre>
+            <p className="mt-2 text-[10px] text-muted-foreground">Paste into your store's HTML where the AR button should appear.</p>
+          </div>
         </div>
       </div>
-      
-      {processingJobs.length > 0 && (
-        <div className="rounded-2xl glass p-5">
-          <h3 className="mb-3 text-sm font-medium">Processing Jobs</h3>
-          <ul className="space-y-2 text-sm">
-            {processingJobs.map(j => (
-              <li key={j.id} className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">{j.provider}</span>
-                  <span className="font-mono text-xs">{j.id.slice(0, 8)}</span>
-                </div>
-                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getJobStatusColor(j.status)}`}>{j.status}</span>
-                <span className="text-xs text-muted-foreground">{j.retries || 0}/{j.max_retries || 5} retries</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
     </DashboardShell>
   );
 }

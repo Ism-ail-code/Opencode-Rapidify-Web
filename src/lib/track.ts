@@ -1,4 +1,4 @@
-import { trackEvent } from "@/lib/analytics.functions";
+import { trackEvent } from "@/lib/embed.functions";
 
 function sid() {
   if (typeof window === "undefined") return null;

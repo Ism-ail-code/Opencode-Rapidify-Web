@@ -11,7 +11,7 @@ export const getPublicProduct = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: product, error } = await supabaseAdmin
       .from("products")
-      .select("id, slug, title, description, price_cents, currency, thumbnail_url, model_glb_url, model_usdz_url, buy_url, status, merchant_id, merchants:merchant_id(id, name, slug, logo_url, brand_color)")
+      .select("id, slug, title, description, price_cents, currency, thumbnail_url, model_glb_url, model_usdz_url, buy_url, status, merchant_id")
       .eq("slug", data.slug)
       .eq("status", "active")
       .maybeSingle();
@@ -20,19 +20,27 @@ export const getPublicProduct = createServerFn({ method: "GET" })
       return null;
     }
     if (!product) return null;
+
+    // Fetch merchant info separately to avoid schema-cache join issues
+    const { data: merchant } = await supabaseAdmin
+      .from("merchants")
+      .select("id, name, slug, logo_url, brand_color")
+      .eq("id", product.merchant_id)
+      .maybeSingle();
+
     const { data: variants } = await supabaseAdmin
       .from("product_variants")
       .select("id, name, color_hex, model_glb_url, model_usdz_url, thumbnail_url, sort_order")
       .eq("product_id", product.id)
       .order("sort_order", { ascending: true });
-    return { product, variants: variants ?? [] };
+    return { product: { ...product, merchants: merchant }, variants: variants ?? [] };
   });
 
 export const listFeaturedProducts = createServerFn({ method: "GET" }).handler(async () => {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
     .from("products")
-    .select("id, slug, title, thumbnail_url, price_cents, currency, merchants:merchant_id(name, slug)")
+    .select("id, slug, title, thumbnail_url, price_cents, currency, merchant_id")
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(12);
@@ -40,7 +48,17 @@ export const listFeaturedProducts = createServerFn({ method: "GET" }).handler(as
     console.error("[listFeaturedProducts] Query error:", error.message);
     return [];
   }
-  return data ?? [];
+  if (!data || data.length === 0) return [];
+
+  // Fetch merchant names separately
+  const merchantIds = [...new Set(data.map(p => p.merchant_id))];
+  const { data: merchants } = await supabaseAdmin
+    .from("merchants")
+    .select("id, name, slug")
+    .in("id", merchantIds);
+  const merchantMap = new Map((merchants ?? []).map(m => [m.id, m]));
+
+  return data.map(p => ({ ...p, merchants: merchantMap.get(p.merchant_id) ?? null }));
 });
 
 export const listMyProducts = createServerFn({ method: "GET" })
@@ -119,14 +137,19 @@ export const upsertProduct = createServerFn({ method: "POST" })
       .from("products").insert(payload).select().single();
     if (error) throw error;
 
-    await context.supabase
-      .from("processing_jobs")
-      .insert({
-        product_id: ins.id, merchant_id: merchantId, provider: "meshy",
-        status: "queued", input: { source: "manual_upload" },
-        retries: 0, max_retries: 5,
-        next_retry_at: new Date(Date.now() + 1000).toISOString(),
-      });
+    // Only create a processing job if the user did NOT provide direct 3D files.
+    // Direct uploads (GLB/USDZ) bypass the queue and go live instantly.
+    const hasDirectModels = !!(data.model_glb_url || data.model_usdz_url);
+    if (!hasDirectModels) {
+      await context.supabase
+        .from("processing_jobs")
+        .insert({
+          product_id: ins.id, merchant_id: merchantId, provider: "meshy",
+          status: "queued", input: { source: "manual_upload" },
+          retries: 0, max_retries: 5,
+          next_retry_at: new Date(Date.now() + 1000).toISOString(),
+        });
+    }
 
     return ins;
   });
@@ -138,4 +161,62 @@ export const deleteProduct = createServerFn({ method: "POST" })
     const { error } = await context.supabase.from("products").delete().eq("id", data.id);
     if (error) throw error;
     return { ok: true };
+  });
+
+/**
+ * Called by the Flutter mobile app after a LiDAR/camera scan completes.
+ * Uploads the captured GLB/USDZ directly to storage, updates the product,
+ * and marks it live — completely bypassing the background job queue.
+ */
+export const finalizeDirectUpload = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((d: unknown) => z.object({
+    product_id: z.string().uuid(),
+    model_glb_url: z.string().url().optional().nullable(),
+    model_usdz_url: z.string().url().optional().nullable(),
+    thumbnail_url: z.string().url().optional().nullable(),
+  }).parse(d))
+  .handler(async ({ data, context }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    // Verify the user owns this product (separate queries to avoid schema-cache join issues)
+    const { data: product, error: fetchErr } = await supabaseAdmin
+      .from("products")
+      .select("id, merchant_id")
+      .eq("id", data.product_id)
+      .maybeSingle();
+
+    if (fetchErr || !product) throw new Error("Product not found");
+
+    const { data: merchant } = await supabaseAdmin
+      .from("merchants")
+      .select("owner_id")
+      .eq("id", product.merchant_id)
+      .maybeSingle();
+
+    if (!merchant || merchant.owner_id !== context.userId) {
+      throw new Error("Unauthorized");
+    }
+
+    // Update the product with the direct 3D assets
+    const updatePayload: Record<string, unknown> = { status: "active" };
+    if (data.model_glb_url) updatePayload.model_glb_url = data.model_glb_url;
+    if (data.model_usdz_url) updatePayload.model_usdz_url = data.model_usdz_url;
+    if (data.thumbnail_url) updatePayload.thumbnail_url = data.thumbnail_url;
+
+    const { error: updateErr } = await supabaseAdmin
+      .from("products")
+      .update(updatePayload)
+      .eq("id", data.product_id);
+
+    if (updateErr) throw updateErr;
+
+    // Mark any queued processing jobs as "ready" (skip the queue)
+    await supabaseAdmin
+      .from("processing_jobs")
+      .update({ status: "ready", output: { source: "direct_upload", completed_at: new Date().toISOString() } })
+      .eq("product_id", data.product_id)
+      .in("status", ["queued", "processing"]);
+
+    return { success: true, product_id: data.product_id };
   });
