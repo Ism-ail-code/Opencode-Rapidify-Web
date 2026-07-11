@@ -2,11 +2,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, queryOptions, useQueryClient } from "@tanstack/react-query";
 import { DashboardShell } from "@/components/DashboardShell";
 import { listMyProducts } from "@/lib/products.functions";
-import { getMyAnalytics, getAttributionSummary } from "@/lib/analytics.functions";
-import type { AttributionSummary } from "@/lib/analytics.functions";
+import { getMyAnalytics } from "@/lib/analytics.functions";
 import { getMyMerchant, claimDemoStore } from "@/lib/merchant.functions";
 import { getProcessingJobs } from "@/lib/jobs.functions";
-import { Boxes, Eye, Sparkles, ShoppingBag, Hourglass, AlertTriangle, RefreshCw, Package, DollarSign, BarChart3, TrendingUp, Target } from "lucide-react";
+import { Boxes, Eye, Sparkles, ShoppingBag, Hourglass, AlertTriangle, RefreshCw, Package } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import { useEffect, Component, type ReactNode, type ErrorInfo } from "react";
 
@@ -14,7 +13,6 @@ const analyticsOpts = queryOptions({ queryKey: ["my-analytics"], queryFn: () => 
 const productsOpts = queryOptions({ queryKey: ["my-products"], queryFn: () => listMyProducts() });
 const merchantOpts = queryOptions({ queryKey: ["my-merchant"], queryFn: () => getMyMerchant() });
 const processingJobsOpts = queryOptions({ queryKey: ["processing-jobs"], queryFn: () => getProcessingJobs() });
-const attributionOpts = queryOptions({ queryKey: ["attribution-summary"], queryFn: () => getAttributionSummary() });
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — Rapidify" }, { name: "robots", content: "noindex" }] }),
@@ -40,44 +38,6 @@ function StatsCards({ products, analytics }: { products: any[]; analytics: any }
           <div className="mt-2 text-3xl font-semibold tracking-tight">{s.value}</div>
         </div>
       ))}
-    </div>
-  );
-}
-
-function AttributionCards({ attribution }: { attribution: AttributionSummary | null }) {
-  const safe = attribution ?? {
-    totalViews: 0, arLaunches: 0, arEngagementRate: "0.0",
-    addToCartAfterAr: 0, conversionRateAfterAr: "0.0",
-    estimatedRevenueInfluenced: 0, avgArSessionDuration: "0s",
-    totalSessions: 0, arSessions: 0, purchaseSessions: 0,
-  };
-
-  const cards = [
-    { label: "AR engagement rate", value: `${safe.arEngagementRate}%`, sub: `${safe.arLaunches} AR launches`, icon: Target },
-    { label: "Add-to-cart after AR", value: safe.addToCartAfterAr, sub: `${safe.addToCartAfterAr} sessions`, icon: ShoppingBag },
-    { label: "Conversion after AR", value: `${safe.conversionRateAfterAr}%`, sub: `${safe.purchaseSessions} purchases`, icon: TrendingUp },
-    { label: "Revenue influenced", value: `$${(safe.estimatedRevenueInfluenced / 100).toLocaleString()}`, sub: `Avg AR session ${safe.avgArSessionDuration}`, icon: DollarSign },
-  ];
-
-  return (
-    <div className="rounded-2xl glass p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <BarChart3 className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-sm font-medium">AR Revenue Attribution — last 30 days</h3>
-        <Link to="/analytics" className="ml-auto text-xs text-muted-foreground hover:text-foreground">Full analytics →</Link>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map(c => (
-          <div key={c.label} className="rounded-xl bg-muted/30 p-4">
-            <div className="flex items-center justify-between text-muted-foreground">
-              <span className="text-[10px] uppercase tracking-wider">{c.label}</span>
-              <c.icon className="h-3.5 w-3.5" />
-            </div>
-            <div className="mt-1 text-2xl font-semibold tracking-tight">{c.value}</div>
-            <div className="mt-0.5 text-[11px] text-muted-foreground">{c.sub}</div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
@@ -179,10 +139,9 @@ function DashboardContent({ merchant }: { merchant: any }) {
   const { data: analytics, isLoading: analyticsLoading, isError: analyticsError } = useQuery(analyticsOpts);
   const { data: products, isLoading: productsLoading, isError: productsError } = useQuery(productsOpts);
   const { data: processingJobs, isLoading: jobsLoading, isError: jobsError } = useQuery(processingJobsOpts);
-  const { data: attribution, isLoading: attributionLoading } = useQuery(attributionOpts);
   const qc = useQueryClient();
 
-  if (analyticsLoading || productsLoading || jobsLoading || attributionLoading) {
+  if (analyticsLoading || productsLoading || jobsLoading) {
     return <div className="p-8 text-sm text-muted-foreground">Loading dashboard metrics...</div>;
   }
 
@@ -201,7 +160,6 @@ function DashboardContent({ merchant }: { merchant: any }) {
   const safeProducts = Array.isArray(products) ? products : [];
   const safeJobs = Array.isArray(processingJobs) ? processingJobs : [];
   const safeAnalytics = analytics ?? { totals: {}, days: [], recent: [] };
-  const safeAttribution = attribution ?? null;
 
   const hasProducts = safeProducts.length > 0;
   const hasAnalytics = safeAnalytics.days?.length > 0;
@@ -209,9 +167,6 @@ function DashboardContent({ merchant }: { merchant: any }) {
   return (
     <>
       <StatsCards products={safeProducts} analytics={safeAnalytics} />
-      <div className="mt-6">
-        <AttributionCards attribution={safeAttribution} />
-      </div>
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
         <EngagementChart analytics={safeAnalytics} />
         <ProcessingQueue processingJobs={safeJobs} qc={qc} />
