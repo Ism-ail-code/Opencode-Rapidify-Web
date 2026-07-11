@@ -71,6 +71,7 @@ export type Database = {
           created_at: string
           id: string
           logo_url: string | null
+          marketplace: string
           name: string
           owner_id: string | null
           slug: string
@@ -81,6 +82,7 @@ export type Database = {
           created_at?: string
           id?: string
           logo_url?: string | null
+          marketplace?: string
           name: string
           owner_id?: string | null
           slug: string
@@ -91,6 +93,7 @@ export type Database = {
           created_at?: string
           id?: string
           logo_url?: string | null
+          marketplace?: string
           name?: string
           owner_id?: string | null
           slug?: string
@@ -296,24 +299,48 @@ export type Database = {
       }
       profiles: {
         Row: {
-          created_at: string
+          business_email: string
+          business_name: string
           corporate_title: string
+          country: string
+          created_at: string
+          estimated_monthly_orders: number | null
           full_name: string
           id: string
+          is_verified: boolean
+          onboarding_completed_at: string | null
+          seller_id: string | null
+          tax_vat_number: string | null
           updated_at: string
         }
         Insert: {
+          business_email?: string
+          business_name?: string
           corporate_title?: string
+          country?: string
           created_at?: string
+          estimated_monthly_orders?: number | null
           full_name?: string
           id: string
+          is_verified?: boolean
+          onboarding_completed_at?: string | null
+          seller_id?: string | null
+          tax_vat_number?: string | null
           updated_at?: string
         }
         Update: {
+          business_email?: string
+          business_name?: string
           corporate_title?: string
+          country?: string
           created_at?: string
+          estimated_monthly_orders?: number | null
           full_name?: string
           id?: string
+          is_verified?: boolean
+          onboarding_completed_at?: string | null
+          seller_id?: string | null
+          tax_vat_number?: string | null
           updated_at?: string
         }
         Relationships: [

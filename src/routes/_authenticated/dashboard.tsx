@@ -4,9 +4,9 @@ import { DashboardShell } from "@/components/DashboardShell";
 import { listMyProducts } from "@/lib/products.functions";
 import { getMyAnalytics, getAttributionSummary } from "@/lib/analytics.functions";
 import type { AttributionSummary } from "@/lib/analytics.functions";
-import { getMyMerchant, claimDemoStore } from "@/lib/merchant.functions";
+import { getMyMerchant, getMyProfile, claimDemoStore } from "@/lib/merchant.functions";
 import { getProcessingJobs } from "@/lib/jobs.functions";
-import { Boxes, Eye, Sparkles, ShoppingBag, Hourglass, AlertTriangle, RefreshCw, Package, DollarSign, BarChart3, TrendingUp, Target } from "lucide-react";
+import { Boxes, Eye, Sparkles, ShoppingBag, Hourglass, AlertTriangle, RefreshCw, Package, DollarSign, BarChart3, TrendingUp, Target, ShieldCheck, ShieldAlert, Globe, Link2 } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import { useEffect, Component, type ReactNode, type ErrorInfo } from "react";
 
@@ -15,6 +15,7 @@ const productsOpts = queryOptions({ queryKey: ["my-products"], queryFn: () => li
 const merchantOpts = queryOptions({ queryKey: ["my-merchant"], queryFn: () => getMyMerchant() });
 const processingJobsOpts = queryOptions({ queryKey: ["processing-jobs"], queryFn: () => getProcessingJobs() });
 const attributionOpts = queryOptions({ queryKey: ["attribution-summary"], queryFn: () => getAttributionSummary() });
+const profileOpts = queryOptions({ queryKey: ["my-profile"], queryFn: () => getMyProfile() });
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — Rapidify" }, { name: "robots", content: "noindex" }] }),
@@ -77,6 +78,76 @@ function AttributionCards({ attribution }: { attribution: AttributionSummary | n
             <div className="mt-0.5 text-[11px] text-muted-foreground">{c.sub}</div>
           </div>
         ))}
+      </div>
+    </div>
+  );
+}
+
+function VerificationCard({ profile, merchant }: { profile: any; merchant: any }) {
+  const isVerified = profile?.is_verified ?? false;
+  const storeUrl = merchant?.store_domain ?? "";
+  const marketplace = merchant?.marketplace ?? "other";
+  const businessName = profile?.business_name ?? "";
+
+  return (
+    <div className="rounded-2xl glass p-5">
+      <div className="mb-3 flex items-center gap-2">
+        {isVerified ? (
+          <ShieldCheck className="h-4 w-4 text-emerald-400" />
+        ) : (
+          <ShieldAlert className="h-4 w-4 text-amber-400" />
+        )}
+        <h3 className="text-sm font-medium">Business Verification</h3>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl bg-muted/30 p-3">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            {isVerified ? (
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+            ) : (
+              <ShieldAlert className="h-3.5 w-3.5 text-amber-400" />
+            )}
+            <span className="text-[10px] uppercase tracking-wider">Status</span>
+          </div>
+          <div className={`mt-1 text-sm font-semibold ${isVerified ? "text-emerald-400" : "text-amber-400"}`}>
+            {isVerified ? "Verified" : "Unverified"}
+          </div>
+          <div className="mt-0.5 text-[11px] text-muted-foreground">
+            {businessName || "Business"}
+          </div>
+        </div>
+        <div className="rounded-xl bg-muted/30 p-3">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Globe className="h-3.5 w-3.5" />
+            <span className="text-[10px] uppercase tracking-wider">Store URL</span>
+          </div>
+          <div className="mt-1 text-sm font-semibold truncate">
+            {storeUrl ? (
+              <span className="text-emerald-400">Valid</span>
+            ) : (
+              <span className="text-muted-foreground">Not set</span>
+            )}
+          </div>
+          {storeUrl && (
+            <div className="mt-0.5 truncate text-[11px] text-muted-foreground" title={storeUrl}>
+              {storeUrl.replace(/^https?:\/\//, "")}
+            </div>
+          )}
+        </div>
+        <div className="rounded-xl bg-muted/30 p-3">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Link2 className="h-3.5 w-3.5" />
+            <span className="text-[10px] uppercase tracking-wider">Webhook</span>
+          </div>
+          <div className="mt-1 text-sm font-semibold">
+            {isVerified ? (
+              <span className="text-emerald-400">Connected</span>
+            ) : (
+              <span className="text-muted-foreground">Pending</span>
+            )}
+          </div>
+          <div className="mt-0.5 text-[11px] text-muted-foreground capitalize">{marketplace}</div>
+        </div>
       </div>
     </div>
   );
@@ -180,9 +251,10 @@ function DashboardContent({ merchant }: { merchant: any }) {
   const { data: products, isLoading: productsLoading, isError: productsError } = useQuery(productsOpts);
   const { data: processingJobs, isLoading: jobsLoading, isError: jobsError } = useQuery(processingJobsOpts);
   const { data: attribution, isLoading: attributionLoading } = useQuery(attributionOpts);
+  const { data: profile, isLoading: profileLoading } = useQuery(profileOpts);
   const qc = useQueryClient();
 
-  if (analyticsLoading || productsLoading || jobsLoading || attributionLoading) {
+  if (analyticsLoading || productsLoading || jobsLoading || attributionLoading || profileLoading) {
     return <div className="p-8 text-sm text-muted-foreground">Loading dashboard metrics...</div>;
   }
 
@@ -202,12 +274,16 @@ function DashboardContent({ merchant }: { merchant: any }) {
   const safeJobs = Array.isArray(processingJobs) ? processingJobs : [];
   const safeAnalytics = analytics ?? { totals: {}, days: [], recent: [] };
   const safeAttribution = attribution ?? null;
+  const safeProfile = profile ?? null;
 
   const hasProducts = safeProducts.length > 0;
 
   return (
     <>
       <StatsCards products={safeProducts} analytics={safeAnalytics} />
+      <div className="mt-6">
+        <VerificationCard profile={safeProfile} merchant={merchant} />
+      </div>
       <div className="mt-6">
         <AttributionCards attribution={safeAttribution} />
       </div>

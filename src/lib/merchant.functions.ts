@@ -1,5 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { isValidUrl, isUrlReachable, verifyWebhookConnectivity } from "@/lib/verification.functions";
 
 export const getMyMerchant = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
@@ -9,11 +11,18 @@ export const getMyMerchant = createServerFn({ method: "GET" })
     return data;
   });
 
+export const getMyProfile = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data } = await context.supabase
+      .from("profiles").select("*").eq("id", context.userId).maybeSingle();
+    return data;
+  });
+
 export const claimDemoStore = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    // Assign demo merchant to user if it's unclaimed
     const { data: demo } = await supabaseAdmin
       .from("merchants").select("id, owner_id").eq("slug", "rapidify-demo").maybeSingle();
     if (demo && !demo.owner_id) {
@@ -23,19 +32,31 @@ export const claimDemoStore = createServerFn({ method: "POST" })
     return { claimed: false };
   });
 
-export interface OnboardingInput {
-  fullName: string;
-  corporateTitle: string;
-  brandName: string;
-  storeDomain: string;
-  platform?: string;
-  apiSecretKey?: string;
-  businessRegId?: string;
-}
+// ---------------------------------------------------------------------------
+// Onboarding input schema with business verification fields
+// ---------------------------------------------------------------------------
+
+export const OnboardingSchema = z.object({
+  // Required
+  fullName: z.string().min(1, "Representative name is required"),
+  businessName: z.string().min(1, "Business name is required"),
+  marketplace: z.enum(["shopify", "daraz", "amazon", "other"]),
+  storeDomain: z.string().url("Store URL must be a valid URL"),
+  country: z.string().min(1, "Country is required"),
+  businessEmail: z.string().email("Business email must be valid"),
+
+  // Optional
+  sellerId: z.string().optional().default(""),
+  taxVatNumber: z.string().optional().default(""),
+  estimatedMonthlyOrders: z.number().int().min(0).optional().default(0),
+  webhookUrl: z.string().url().optional().or(z.literal("")),
+});
+
+export type OnboardingInput = z.infer<typeof OnboardingSchema>;
 
 export const completeOnboarding = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((data: OnboardingInput) => data)
+  .inputValidator((d: unknown) => OnboardingSchema.parse(d))
   .handler(async ({ context, data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const userId = context.userId;
@@ -51,15 +72,14 @@ export const completeOnboarding = createServerFn({ method: "POST" })
       return { success: true, message: "Already onboarded" };
     }
 
-    // Generate slug from brand name
-    const slug = data.brandName
+    // Generate slug from business name
+    const slug = data.businessName
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, "")
       .replace(/\s+/g, "-")
       .replace(/-+/g, "-")
       .replace(/^-|-$/g, "");
 
-    // Ensure slug is unique
     let finalSlug = slug;
     let counter = 1;
     while (true) {
@@ -73,13 +93,48 @@ export const completeOnboarding = createServerFn({ method: "POST" })
       counter++;
     }
 
-    // 1. Create profile
+    // --- Verification checks ---
+
+    // 1. Validate store URL is reachable
+    let storeUrlValid = false;
+    try {
+      storeUrlValid = isValidUrl(data.storeDomain) && await isUrlReachable(data.storeDomain);
+    } catch {
+      storeUrlValid = false;
+    }
+
+    // 2. Verify webhook connectivity if a webhook URL was provided
+    let webhookOk = true;
+    let webhookMessage = "";
+    if (data.webhookUrl) {
+      const result = await verifyWebhookConnectivity(data.webhookUrl);
+      webhookOk = result.ok;
+      webhookMessage = result.message;
+    }
+
+    // is_verified = true when onboarding complete AND store URL valid
+    // AND webhook verified (if configured). If webhook fails, still allow
+    // the business to use the platform — just mark not verified.
+    const storeUrlVerified = isValidUrl(data.storeDomain) && storeUrlValid;
+    const isVerified = storeUrlVerified && webhookOk;
+
+    // --- Create records ---
+
+    // 1. Create/update profile with business verification data
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .upsert({
         id: userId,
         full_name: data.fullName,
-        corporate_title: data.corporateTitle,
+        corporate_title: data.businessName,
+        business_name: data.businessName,
+        country: data.country,
+        business_email: data.businessEmail,
+        seller_id: data.sellerId || "",
+        tax_vat_number: data.taxVatNumber || "",
+        estimated_monthly_orders: data.estimatedMonthlyOrders || 0,
+        is_verified: isVerified,
+        onboarding_completed_at: new Date().toISOString(),
       }, { onConflict: "id" });
 
     if (profileError) {
@@ -88,19 +143,15 @@ export const completeOnboarding = createServerFn({ method: "POST" })
 
     // 2. Create merchant
     const merchantId = crypto.randomUUID();
-    const storeMetadata = JSON.stringify({
-      domain: data.storeDomain,
-      platform: data.platform || null,
-      businessRegId: data.businessRegId || null,
-    });
     const { error: merchantError } = await supabaseAdmin
       .from("merchants")
       .insert({
         id: merchantId,
         owner_id: userId,
-        name: data.brandName,
+        name: data.businessName,
         slug: finalSlug,
-        store_domain: storeMetadata,
+        store_domain: data.storeDomain,
+        marketplace: data.marketplace,
       });
 
     if (merchantError) {
@@ -120,5 +171,12 @@ export const completeOnboarding = createServerFn({ method: "POST" })
       throw new Error(`Failed to create merchant member: ${memberError.message}`);
     }
 
-    return { success: true, merchantId };
+    return {
+      success: true,
+      merchantId,
+      isVerified,
+      storeUrlValid,
+      webhookOk,
+      webhookMessage: webhookMessage || undefined,
+    };
   });

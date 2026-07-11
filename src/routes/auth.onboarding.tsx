@@ -1,41 +1,58 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { completeOnboarding } from "@/lib/merchant.functions";
+import type { OnboardingInput } from "@/lib/merchant.functions";
 
 export const Route = createFileRoute("/auth/onboarding")({
   head: () => ({
     meta: [
       { title: "Set up your store — Rapidify" },
-      { name: "description", content: "Complete your merchant profile to get started with Rapidify." },
+      { name: "description", content: "Complete your business profile to get started with Rapidify." },
       { name: "robots", content: "noindex" },
     ],
   }),
   component: OnboardingPage,
 });
 
-interface FormState {
-  fullName: string;
-  corporateTitle: string;
-  storeDomain: string;
-}
+const MARKETPLACE_OPTIONS = [
+  { value: "shopify", label: "Shopify" },
+  { value: "daraz", label: "Daraz" },
+  { value: "amazon", label: "Amazon" },
+  { value: "other", label: "Other" },
+] as const;
 
 function OnboardingPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
-  const [form, setForm] = useState<FormState>({
+  const [form, setForm] = useState({
     fullName: "",
-    corporateTitle: "",
+    businessName: "",
+    marketplace: "other" as OnboardingInput["marketplace"],
     storeDomain: "",
+    country: "",
+    businessEmail: "",
+    sellerId: "",
+    taxVatNumber: "",
+    estimatedMonthlyOrders: "",
+    webhookUrl: "",
   });
 
-  const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+  const update = (key: keyof typeof form, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const canSubmit = form.fullName.trim() && form.corporateTitle.trim() && form.storeDomain.trim() && !loading;
+  const requiredFilled = !!(
+    form.fullName.trim() &&
+    form.businessName.trim() &&
+    form.storeDomain.trim() &&
+    form.country.trim() &&
+    form.businessEmail.trim()
+  );
+
+  const canSubmit = requiredFilled && !loading;
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -44,37 +61,27 @@ function OnboardingPage() {
 
       setLoading(true);
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) throw new Error("Not authenticated");
-
-        const slug = form.corporateTitle
-          .toLowerCase()
-          .replace(/[^a-z0-9\s-]/g, "")
-          .replace(/\s+/g, "-")
-          .replace(/-+/g, "-")
-          .replace(/^-|-$/g, "");
-
-        const merchantId = crypto.randomUUID();
-
-        const { error: merchantError } = await supabase.from("merchants").insert({
-          id: merchantId,
-          owner_id: session.user.id,
-          name: form.corporateTitle.trim(),
-          slug,
-          store_domain: form.storeDomain.trim(),
+        const result = await completeOnboarding({
+          data: {
+            fullName: form.fullName.trim(),
+            businessName: form.businessName.trim(),
+            marketplace: form.marketplace,
+            storeDomain: form.storeDomain.trim(),
+            country: form.country.trim(),
+            businessEmail: form.businessEmail.trim(),
+            sellerId: form.sellerId.trim() || undefined,
+            taxVatNumber: form.taxVatNumber.trim() || undefined,
+            estimatedMonthlyOrders: form.estimatedMonthlyOrders ? parseInt(form.estimatedMonthlyOrders, 10) : 0,
+            webhookUrl: form.webhookUrl.trim() || undefined,
+          },
         });
 
-        if (merchantError) throw merchantError;
+        if (result.isVerified) {
+          toast.success("Business verified! Welcome to Rapidify.");
+        } else {
+          toast.success("Store created! Complete webhook setup to get verified.");
+        }
 
-        const { error: memberError } = await supabase.from("merchant_members").insert({
-          merchant_id: merchantId,
-          user_id: session.user.id,
-          role: "owner",
-        });
-
-        if (memberError) throw memberError;
-
-        toast.success("Store created! Welcome to Rapidify.");
         navigate({ to: "/dashboard", replace: true });
       } catch (err) {
         toast.error(
@@ -89,9 +96,11 @@ function OnboardingPage() {
 
   const inputClass =
     "w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-[#0F172A] outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20";
+  const labelClass = "text-xs font-medium text-slate-600";
+  const sectionClass = "rounded-xl border border-slate-200 p-5";
 
   return (
-    <div className="grid min-h-screen place-items-center px-4 bg-[#F8FAFC]">
+    <div className="grid min-h-screen place-items-center px-4 py-8 bg-[#F8FAFC]">
       <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
         <Link
           to="/"
@@ -104,22 +113,22 @@ function OnboardingPage() {
         </Link>
 
         <h1 className="text-2xl font-semibold tracking-tight text-[#0F172A]">
-          Set up your store
+          Set up your business
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          Complete your business profile to activate your merchant workspace.
+          Provide your business information to activate your merchant workspace.
         </p>
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-6">
-          {/* Administrator Information */}
-          <div className="rounded-xl border border-slate-200 p-5">
+          {/* Business Information */}
+          <div className={sectionClass}>
             <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Administrator Information
+              Business Information
             </h2>
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-medium text-slate-600">
-                  Administrator Name
+                <label className={labelClass}>
+                  Representative Name <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="text"
@@ -131,30 +140,124 @@ function OnboardingPage() {
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-600">
-                  Legal Company Name
+                <label className={labelClass}>
+                  Business Name <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  value={form.corporateTitle}
-                  onChange={(e) => update("corporateTitle", e.target.value)}
+                  value={form.businessName}
+                  onChange={(e) => update("businessName", e.target.value)}
                   placeholder="Acme Corp Pvt. Ltd."
                   className={`mt-1 ${inputClass}`}
                 />
               </div>
               <div>
-                <label className="text-xs font-medium text-slate-600">
-                  Store Platform Domain URL
+                <label className={labelClass}>
+                  Marketplace <span className="text-red-400">*</span>
+                </label>
+                <select
+                  required
+                  value={form.marketplace}
+                  onChange={(e) => update("marketplace", e.target.value)}
+                  className={`mt-1 ${inputClass}`}
+                >
+                  {MARKETPLACE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>
+                  Store URL <span className="text-red-400">*</span>
                 </label>
                 <input
                   type="url"
                   required
                   value={form.storeDomain}
                   onChange={(e) => update("storeDomain", e.target.value)}
-                  placeholder="https://storedomain.com"
+                  placeholder="https://mystore.com"
                   className={`mt-1 ${inputClass}`}
                 />
+              </div>
+              <div>
+                <label className={labelClass}>
+                  Country <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={form.country}
+                  onChange={(e) => update("country", e.target.value)}
+                  placeholder="Pakistan"
+                  className={`mt-1 ${inputClass}`}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>
+                  Business Email <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={form.businessEmail}
+                  onChange={(e) => update("businessEmail", e.target.value)}
+                  placeholder="contact@acmecorp.com"
+                  className={`mt-1 ${inputClass}`}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Optional Information */}
+          <div className={sectionClass}>
+            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Additional Information (Optional)
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <label className={labelClass}>Seller ID</label>
+                <input
+                  type="text"
+                  value={form.sellerId}
+                  onChange={(e) => update("sellerId", e.target.value)}
+                  placeholder="SELLER123"
+                  className={`mt-1 ${inputClass}`}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Tax / VAT Number</label>
+                <input
+                  type="text"
+                  value={form.taxVatNumber}
+                  onChange={(e) => update("taxVatNumber", e.target.value)}
+                  placeholder="VAT-XX-XXXXXXX"
+                  className={`mt-1 ${inputClass}`}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Estimated Monthly Orders</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={form.estimatedMonthlyOrders}
+                  onChange={(e) => update("estimatedMonthlyOrders", e.target.value)}
+                  placeholder="100"
+                  className={`mt-1 ${inputClass}`}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Webhook URL (for auto-sync)</label>
+                <input
+                  type="url"
+                  value={form.webhookUrl}
+                  onChange={(e) => update("webhookUrl", e.target.value)}
+                  placeholder="https://mystore.com/webhooks/rapidify"
+                  className={`mt-1 ${inputClass}`}
+                />
+                <p className="mt-1 text-[11px] text-slate-400">
+                  If provided, we'll test connectivity during setup.
+                </p>
               </div>
             </div>
           </div>
@@ -164,7 +267,13 @@ function OnboardingPage() {
             disabled={!canSubmit}
             className="w-full rounded-lg bg-[#2563EB] py-3 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Creating your store..." : "Complete Setup"}
+            {loading ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" /> Verifying & setting up...
+              </span>
+            ) : (
+              "Complete Setup"
+            )}
           </button>
 
           <p className="text-center text-[11px] text-slate-400">
