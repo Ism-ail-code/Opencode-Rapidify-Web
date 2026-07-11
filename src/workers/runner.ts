@@ -6,7 +6,7 @@ import { ensureBuckets } from "../lib/storage";
 // ---------------------------------------------------------------------------
 const POLL_INTERVAL_MS = 30_000; // 30 seconds
 const STARTUP_DELAY_MS = 5_000; // 5 seconds grace period on boot
-const MAX連續_FAILURES = 10; // consecutive failures before backing off
+const MAX_CONSECUTIVE_FAILURES = 10; // consecutive failures before backing off
 const BACKOFF_MULTIPLIER = 2; // double interval after max failures
 const MAX_INTERVAL_MS = 300_000; // 5 minutes ceiling
 
@@ -46,7 +46,7 @@ async function cycle(): Promise<boolean> {
       err instanceof Error ? err.message : err,
     );
 
-    if (consecutiveFailures >= MAX连续_FAILURES) {
+    if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
       currentInterval = Math.min(currentInterval * BACKOFF_MULTIPLIER, MAX_INTERVAL_MS);
       console.warn(`[Runner] Backing off — next interval: ${currentInterval / 1000}s`);
     }
@@ -64,7 +64,7 @@ async function main(): Promise<void> {
   console.log("[Runner] AR Commerce Platform — Background Job Worker");
   console.log(`[Runner] PID: ${process.pid}`);
   console.log(`[Runner] Poll interval: ${POLL_INTERVAL_MS / 1000}s`);
-  console.log(`[Runner] Max consecutive failures: ${MAX连续_FAILURES}`);
+  console.log(`[Runner] Max consecutive failures: ${MAX_CONSECUTIVE_FAILURES}`);
   console.log("=".repeat(60));
 
   // 1. Ensure storage buckets exist

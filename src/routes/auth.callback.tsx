@@ -19,56 +19,52 @@ function AuthCallback() {
   useEffect(() => {
     const handleAuth = async () => {
       try {
-        // Supabase exchanges the auth code for a session
         const { data, error } = await supabase.auth.getSession();
 
         if (error) {
           console.error("Auth callback error:", error);
-          navigate({ to: "/auth", replace: true });
+          navigate({ to: "/auth", search: { verify: undefined as string | undefined }, replace: true });
           return;
         }
 
         if (data.session) {
           const user = data.session.user;
 
-          // Check if email is verified (OAuth users are pre-verified)
           if (!user.email_confirmed_at) {
-            navigate({ to: "/auth?verify=pending", replace: true });
+            navigate({ to: "/auth", search: { verify: "pending" }, replace: true });
             return;
           }
 
-          // Check if user has completed onboarding
-          const { data: member } = await supabase
-            .from("merchant_members")
-            .select("merchant_id")
-            .eq("user_id", user.id)
+          // Check if user owns a merchant
+          const { data: merchant } = await supabase
+            .from("merchants")
+            .select("id")
+            .eq("owner_id", user.id)
             .maybeSingle();
 
-          if (!member) {
-            navigate({ to: "/auth/onboarding", replace: true });
+          if (!merchant) {
+            navigate({ to: "/auth/onboarding", search: { verify: undefined as string | undefined }, replace: true });
           } else {
             navigate({ to: "/dashboard", replace: true });
           }
         } else {
-          // No session, check URL hash for tokens
           const hashParams = new URLSearchParams(window.location.hash.substring(1));
           const accessToken = hashParams.get("access_token");
 
           if (accessToken) {
-            // Wait a moment for Supabase to process the session
             await new Promise((resolve) => setTimeout(resolve, 500));
 
             const { data: retryData } = await supabase.auth.getSession();
             if (retryData.session) {
               const user = retryData.session.user;
-              const { data: member } = await supabase
-                .from("merchant_members")
-                .select("merchant_id")
-                .eq("user_id", user.id)
+              const { data: merchant } = await supabase
+                .from("merchants")
+                .select("id")
+                .eq("owner_id", user.id)
                 .maybeSingle();
 
-              if (!member) {
-                navigate({ to: "/auth/onboarding", replace: true });
+              if (!merchant) {
+                navigate({ to: "/auth/onboarding", search: { verify: undefined as string | undefined }, replace: true });
               } else {
                 navigate({ to: "/dashboard", replace: true });
               }
@@ -76,11 +72,11 @@ function AuthCallback() {
             }
           }
 
-          navigate({ to: "/auth", replace: true });
+          navigate({ to: "/auth", search: { verify: undefined as string | undefined }, replace: true });
         }
       } catch (err) {
         console.error("Auth callback error:", err);
-        navigate({ to: "/auth", replace: true });
+        navigate({ to: "/auth", search: { verify: undefined as string | undefined }, replace: true });
       }
     };
 

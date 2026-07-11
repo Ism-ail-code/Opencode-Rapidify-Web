@@ -5,12 +5,18 @@ type RateLimitStore = Map<string, { count: number; resetAt: number }>;
 const rateLimitStore: RateLimitStore = new Map();
 const RATE_LIMIT_CLEANUP_INTERVAL = 60000;
 
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, entry] of rateLimitStore) {
-    if (entry.resetAt < now) rateLimitStore.delete(key);
-  }
-}, RATE_LIMIT_CLEANUP_INTERVAL);
+let cleanupStarted = false;
+
+function startCleanupIfNeeded() {
+  if (cleanupStarted || typeof setInterval === "undefined") return;
+  cleanupStarted = true;
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of rateLimitStore) {
+      if (entry.resetAt < now) rateLimitStore.delete(key);
+    }
+  }, RATE_LIMIT_CLEANUP_INTERVAL);
+}
 
 export function getRateLimitKey(ip: string, endpoint: string): string {
   return `${ip}:${endpoint}`;
@@ -21,6 +27,7 @@ export function checkRateLimit(
   maxRequests: number = 100,
   windowMs: number = 60000
 ): { allowed: boolean; remaining: number; resetAt: number } {
+  startCleanupIfNeeded();
   const now = Date.now();
   const entry = rateLimitStore.get(key);
 
@@ -59,14 +66,32 @@ export const rateLimitMiddleware = createMiddleware().server(async ({ next, requ
   return await next();
 });
 
+/**
+ * Validates data against a Zod schema.
+ * Note: This runs server-side only. The schema must be resolved
+ * on the server, not passed from the client.
+ */
+const SCHEMA_REGISTRY = {
+  string: z.string(),
+  number: z.number(),
+  boolean: z.boolean(),
+  email: z.string().email(),
+  uuid: z.string().uuid(),
+  url: z.string().url(),
+} as const;
+
 export const validateInput = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({
-    schema: z.any(),
+    schemaName: z.string(),
     data: z.any(),
   }).parse(d))
   .handler(async ({ data }) => {
     try {
-      const validated = data.schema.parse(data.data);
+      const schema = SCHEMA_REGISTRY[data.schemaName as keyof typeof SCHEMA_REGISTRY];
+      if (!schema) {
+        throw new Error(`Unknown schema: ${data.schemaName}`);
+      }
+      const validated = schema.parse(data.data);
       return { valid: true, data: validated };
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -104,7 +129,8 @@ export async function validateWebhookSignature(
 
     const subtle = globalThis.crypto?.subtle;
     if (!subtle) {
-      return signature === secret;
+      console.error("[Security] crypto.subtle unavailable — webhook signature verification skipped (insecure)");
+      return false;
     }
 
     const key = await subtle.importKey(

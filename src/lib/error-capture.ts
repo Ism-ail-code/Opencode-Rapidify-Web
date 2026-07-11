@@ -95,7 +95,10 @@ export function isRetryableError(error: unknown): boolean {
       message.includes("econnrefused") ||
       message.includes("econnreset") ||
       message.includes("etimedout") ||
-      message.includes("5")
+      message.includes("500") ||
+      message.includes("502") ||
+      message.includes("503") ||
+      message.includes("504")
     );
   }
   return true;

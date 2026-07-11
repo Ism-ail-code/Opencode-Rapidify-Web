@@ -120,6 +120,24 @@ export const addCredits = createServerFn({ method: "POST" })
     ref_id: z.string().uuid().optional(),
   }).parse(d))
   .handler(async ({ data, context }) => {
+    // Authorization: user must own the merchant or be an admin
+    const { data: merchant } = await context.supabase
+      .from("merchants")
+      .select("id, owner_id")
+      .eq("id", data.merchant_id)
+      .maybeSingle();
+
+    if (!merchant) throw new Error("Merchant not found");
+
+    const { data: isAdmin } = await context.supabase.rpc("has_role", {
+      _role: "admin",
+      _user_id: context.userId,
+    });
+
+    if (merchant.owner_id !== context.userId && !isAdmin) {
+      throw new Error("Unauthorized: you can only add credits to your own merchant account");
+    }
+
     await context.supabase.rpc("add_credits", {
       _merchant_id: data.merchant_id,
       _amount: data.amount,

@@ -17,6 +17,40 @@ interface VendorProduct {
 }
 
 // ---------------------------------------------------------------------------
+// Token encryption helpers
+// ---------------------------------------------------------------------------
+
+async function encryptToken(token: string): Promise<string> {
+  const secret = process.env.SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (!secret) {
+    console.warn("[Marketplace] No SESSION_SECRET set — storing token as-is (insecure)");
+    return token;
+  }
+
+  const encoder = new TextEncoder();
+  const keyMaterial = await globalThis.crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret.slice(0, 32).padEnd(32, "\0")),
+    { name: "AES-GCM" },
+    false,
+    ["encrypt"]
+  );
+
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await globalThis.crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    keyMaterial,
+    encoder.encode(token)
+  );
+
+  // Return iv:ciphertext as base64
+  const combined = new Uint8Array(iv.length + encrypted.byteLength);
+  combined.set(iv, 0);
+  combined.set(new Uint8Array(encrypted), iv.length);
+  return btoa(String.fromCharCode(...combined));
+}
+
+// ---------------------------------------------------------------------------
 // Mock vendor API adapters (replace with real SDK integrations later)
 // ---------------------------------------------------------------------------
 
@@ -84,11 +118,14 @@ export const createMarketplaceConnection = createServerFn({ method: "POST" })
       .maybeSingle();
     if (mErr || !merchant) throw new Error("No merchant profile found. Complete onboarding first.");
 
+    // Encrypt the access token before storing
+    const encryptedToken = await encryptToken(data.access_token);
+
     const { error } = await context.supabase.from("marketplace_connections").insert({
       merchant_id: merchant.id,
       platform: data.vendor,
       store_url: data.store_url,
-      oauth_token_hash: data.access_token,
+      oauth_token_hash: encryptedToken,
       status: "active",
     });
     if (error) throw error;

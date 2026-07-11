@@ -20,7 +20,7 @@ export const trackEvent = createServerFn({ method: "POST" })
       merchant_id: data.merchant_id ?? null,
       variant_id: data.variant_id ?? null,
       metadata: (data.metadata ?? null) as unknown,
-      user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
+      user_agent: null,
     });
     if (error) throw error;
     return { ok: true };
@@ -62,7 +62,7 @@ export const getPublicAssetMeta = createServerFn({ method: "GET" })
       if (catalogItem?.mapped_product_id) {
         const { data: product } = await supabaseAdmin
           .from("products")
-          .select("id, slug, title, description, price_cents, currency, thumbnail_url, model_glb_url, model_usdz_url, buy_url, status, merchant_id")
+          .select("id, slug, title, description, price_cents, currency, model_glb_url, model_usdz_url, buy_url, status, merchant_id")
           .eq("id", catalogItem.mapped_product_id)
           .eq("status", "active")
           .maybeSingle();
@@ -70,7 +70,7 @@ export const getPublicAssetMeta = createServerFn({ method: "GET" })
         if (product) {
           const { data: variants } = await supabaseAdmin
             .from("product_variants")
-            .select("id, name, color_hex, model_glb_url, model_usdz_url, thumbnail_url, sort_order")
+            .select("id, name, color_hex, model_glb_url, model_usdz_url, sort_order")
             .eq("product_id", product.id)
             .order("sort_order", { ascending: true });
 
@@ -94,7 +94,7 @@ export const getPublicAssetMeta = createServerFn({ method: "GET" })
             product_title: product.title,
             price_cents: product.price_cents,
             currency: product.currency,
-            thumbnail_url: product.thumbnail_url,
+            thumbnail_url: null,
             buy_url: product.buy_url,
             variants: variants ?? [],
           };
@@ -106,7 +106,7 @@ export const getPublicAssetMeta = createServerFn({ method: "GET" })
     if (data.merchant_slug) {
       const { data: product, error: productError } = await supabaseAdmin
         .from("products")
-        .select("id, slug, title, description, price_cents, currency, thumbnail_url, model_glb_url, model_usdz_url, buy_url, status, merchant_id")
+        .select("id, slug, title, description, price_cents, currency, model_glb_url, model_usdz_url, buy_url, status, merchant_id")
         .eq("slug", data.merchant_slug)
         .eq("status", "active")
         .maybeSingle();
@@ -116,7 +116,7 @@ export const getPublicAssetMeta = createServerFn({ method: "GET" })
 
       const { data: variants, error: variantsError } = await supabaseAdmin
         .from("product_variants")
-        .select("id, name, color_hex, model_glb_url, model_usdz_url, thumbnail_url, sort_order")
+        .select("id, name, color_hex, model_glb_url, model_usdz_url, sort_order")
         .eq("product_id", product.id)
         .order("sort_order", { ascending: true });
 
@@ -144,7 +144,7 @@ export const getPublicAssetMeta = createServerFn({ method: "GET" })
         product_title: product.title,
         price_cents: product.price_cents,
         currency: product.currency,
-        thumbnail_url: product.thumbnail_url,
+        thumbnail_url: null,
         buy_url: product.buy_url,
         variants: variants ?? [],
       };

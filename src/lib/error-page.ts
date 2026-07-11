@@ -1,15 +1,24 @@
+function escapeHtml(input: string): string {
+  return input
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
 export function renderErrorPage(statusCode: number = 500, message?: string): string {
   const title = statusCode === 404 ? "Page not found"
     : statusCode === 429 ? "Too many requests"
     : statusCode === 503 ? "Service unavailable"
     : "This page didn't load";
 
-  const description = message || (
+  const description = escapeHtml(message || (
     statusCode === 404 ? "The page you're looking for doesn't exist or has been moved."
     : statusCode === 429 ? "You've sent too many requests. Please wait and try again."
     : statusCode === 503 ? "We're doing some maintenance. Please check back soon."
     : "Something went wrong on our end. You can try refreshing or head back home."
-  );
+  ));
 
   return `<!doctype html>
 <html lang="en">

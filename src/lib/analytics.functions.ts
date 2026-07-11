@@ -169,7 +169,7 @@ export const getPerProductAnalytics = createServerFn({ method: "GET" })
     const { data: products } = productIds.length > 0
       ? await import("@/integrations/supabase/client.server").then(m => m.supabaseAdmin)
           .from("products")
-          .select("id, title, slug, thumbnail_url, price_cents, currency")
+          .select("id, title, slug, price_cents, currency")
           .in("id", productIds)
       : { data: [] };
 
@@ -181,7 +181,7 @@ export const getPerProductAnalytics = createServerFn({ method: "GET" })
         productId: stat.product_id,
         title: product?.title || "Unknown",
         slug: product?.slug || "",
-        thumbnail: product?.thumbnail_url || null,
+        thumbnail: null,
         price: product ? (product.price_cents / 100).toFixed(2) : "0.00",
         views: stat.views,
         arLaunches: stat.ar_launches,

@@ -60,16 +60,15 @@ export const verifyFileUpload = createServerFn({ method: "POST" })
     const { filename, bucket, etag } = data;
     
     // Check if file exists and is accessible
-    const { data: fileData, error } = await supabaseAdmin
+    const { data: files, error: listError } = await supabaseAdmin
       .storage
       .from(bucket)
-      .list("")
-      .then(listData => {
-        const files = listData.data || [];
-        return files.find(f => f.name === filename);
-      });
+      .list("");
     
-    if (error) throw error;
+    if (listError) throw listError;
+    
+    const fileData = (files ?? []).find(f => f.name === filename);
+    
     if (!fileData) {
       throw new Error("File not found");
     }
@@ -139,12 +138,10 @@ export const generateUploadUrl = createServerFn({ method: "POST" })
     const { filename, bucket, contentType, size, expiresIn } = data;
     
     // Generate signed URL for direct upload
-    const options = expiresIn ? { expiresIn } : undefined;
-    
     const { data: signedUrlData, error } = await supabaseAdmin
       .storage
       .from(bucket)
-      .createSignedUrl(filename, expiresIn || 3600, options);
+      .createSignedUrl(filename, expiresIn || 3600);
     
     if (error) throw error;
     

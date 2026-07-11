@@ -94,11 +94,11 @@ function MarketplacePage() {
                 {connections.map(c => (
                   <div key={c.id} className="flex items-center justify-between rounded-xl bg-muted/30 border border-border/50 px-4 py-3">
                     <div className="flex items-center gap-3">
-                      <span className="rounded-full bg-foreground/10 px-2.5 py-1 text-[10px] font-semibold uppercase">{c.vendor}</span>
+                      <span className="rounded-full bg-foreground/10 px-2.5 py-1 text-[10px] font-semibold uppercase">{c.platform}</span>
                       <div>
                         <p className="text-sm font-medium">{c.store_url}</p>
                         <p className="text-[10px] text-muted-foreground">
-                          {c.is_active ? "Active" : "Inactive"}
+                          {c.status === "active" ? "Active" : "Inactive"}
                           {c.last_sync_at ? ` · Last sync ${new Date(c.last_sync_at).toLocaleDateString()}` : " · Never synced"}
                         </p>
                       </div>

@@ -1,9 +1,8 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useState, useMemo } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { completeOnboarding } from "@/lib/merchant.functions";
+import { useState, useCallback } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Sparkles } from "lucide-react";
+import { Sparkles, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/auth/onboarding")({
   head: () => ({
@@ -16,120 +15,161 @@ export const Route = createFileRoute("/auth/onboarding")({
   component: OnboardingPage,
 });
 
+interface FormState {
+  fullName: string;
+  corporateTitle: string;
+  storeDomain: string;
+}
+
 function OnboardingPage() {
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
 
-  const [fullName, setFullName] = useState("");
-  const [corporateTitle, setCorporateTitle] = useState("");
-  const [brandName, setBrandName] = useState("");
-  const [storeDomain, setStoreDomain] = useState("");
+  const [form, setForm] = useState<FormState>({
+    fullName: "",
+    corporateTitle: "",
+    storeDomain: "",
+  });
 
-  const slug = useMemo(() => {
-    return brandName
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, "")
-      .replace(/\s+/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
-  }, [brandName]);
+  const update = <K extends keyof FormState>(key: K, value: FormState[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    try {
-      await completeOnboarding({ data: { fullName, corporateTitle, brandName, storeDomain } });
-      await queryClient.invalidateQueries();
-      toast.success("Store created! Welcome to Rapidify.");
-      navigate({ to: "/dashboard", replace: true });
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const canSubmit = form.fullName.trim() && form.corporateTitle.trim() && form.storeDomain.trim() && !loading;
+
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!canSubmit) return;
+
+      setLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error("Not authenticated");
+
+        const slug = form.corporateTitle
+          .toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, "")
+          .replace(/\s+/g, "-")
+          .replace(/-+/g, "-")
+          .replace(/^-|-$/g, "");
+
+        const merchantId = crypto.randomUUID();
+
+        const { error: merchantError } = await supabase.from("merchants").insert({
+          id: merchantId,
+          owner_id: session.user.id,
+          name: form.corporateTitle.trim(),
+          slug,
+          store_domain: form.storeDomain.trim(),
+        });
+
+        if (merchantError) throw merchantError;
+
+        const { error: memberError } = await supabase.from("merchant_members").insert({
+          merchant_id: merchantId,
+          user_id: session.user.id,
+          role: "owner",
+        });
+
+        if (memberError) throw memberError;
+
+        toast.success("Store created! Welcome to Rapidify.");
+        navigate({ to: "/dashboard", replace: true });
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "Something went wrong. Please try again."
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [form, canSubmit, navigate]
+  );
+
+  const inputClass =
+    "w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-[#0F172A] outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20";
 
   return (
-    <div className="grid min-h-screen place-items-center px-4">
-      <button type="button" onClick={() => window.history.back()} className="text-sm text-slate-500 hover:text-[#2563EB] font-medium transition-colors duration-150 absolute top-6 left-6 flex items-center gap-1.5 cursor-pointer">
-        ← Go Back
-      </button>
-      <div className="w-full max-w-lg rounded-2xl border border-border bg-card p-8">
-        <Link to="/" className="mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-foreground text-background"><Sparkles className="h-3.5 w-3.5" /></span>
+    <div className="grid min-h-screen place-items-center px-4 bg-[#F8FAFC]">
+      <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+        <Link
+          to="/"
+          className="mb-6 inline-flex items-center gap-2 text-sm text-slate-500 hover:text-[#0F172A]"
+        >
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#0F172A] text-white">
+            <Sparkles className="h-3.5 w-3.5" />
+          </span>
           Rapidify
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Set up your store</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Tell us about yourself and your business to get started.
+
+        <h1 className="text-2xl font-semibold tracking-tight text-[#0F172A]">
+          Set up your store
+        </h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Complete your business profile to activate your merchant workspace.
         </p>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-5">
-          {/* Individual Information */}
-          <div className="space-y-3">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Your Information</h2>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Full Legal Name</label>
-              <input
-                type="text"
-                required
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="Jane Doe"
-                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none transition focus:border-foreground focus:ring-1 focus:ring-foreground/20"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Corporate Title</label>
-              <input
-                type="text"
-                required
-                value={corporateTitle}
-                onChange={(e) => setCorporateTitle(e.target.value)}
-                placeholder="Founder & CEO"
-                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none transition focus:border-foreground focus:ring-1 focus:ring-foreground/20"
-              />
-            </div>
-          </div>
-
-          {/* Enterprise Store */}
-          <div className="space-y-3">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Business Details</h2>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Business / Brand Name</label>
-              <input
-                type="text"
-                required
-                value={brandName}
-                onChange={(e) => setBrandName(e.target.value)}
-                placeholder="Sana Safinaz Outlet"
-                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none transition focus:border-foreground focus:ring-1 focus:ring-foreground/20"
-              />
-              {slug && (
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  Store URL: <span className="font-medium text-foreground">rapidify.app/{slug}</span>
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground">Store E-Commerce Domain / URL</label>
-              <input
-                type="url"
-                value={storeDomain}
-                onChange={(e) => setStoreDomain(e.target.value)}
-                placeholder="https://store-domain.com"
-                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm outline-none transition focus:border-foreground focus:ring-1 focus:ring-foreground/20"
-              />
+        <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+          {/* Administrator Information */}
+          <div className="rounded-xl border border-slate-200 p-5">
+            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Administrator Information
+            </h2>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-medium text-slate-600">
+                  Administrator Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={form.fullName}
+                  onChange={(e) => update("fullName", e.target.value)}
+                  placeholder="Jane Doe"
+                  className={`mt-1 ${inputClass}`}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600">
+                  Legal Company Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={form.corporateTitle}
+                  onChange={(e) => update("corporateTitle", e.target.value)}
+                  placeholder="Acme Corp Pvt. Ltd."
+                  className={`mt-1 ${inputClass}`}
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-slate-600">
+                  Store Platform Domain URL
+                </label>
+                <input
+                  type="url"
+                  required
+                  value={form.storeDomain}
+                  onChange={(e) => update("storeDomain", e.target.value)}
+                  placeholder="https://storedomain.com"
+                  className={`mt-1 ${inputClass}`}
+                />
+              </div>
             </div>
           </div>
 
           <button
-            disabled={loading || !slug}
-            className="w-full rounded-lg bg-foreground py-2.5 text-sm font-medium text-background transition hover:opacity-90 disabled:opacity-60"
+            type="submit"
+            disabled={!canSubmit}
+            className="w-full rounded-lg bg-[#2563EB] py-3 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? "Creating your store..." : "Launch my store"}
+            {loading ? "Creating your store..." : "Complete Setup"}
           </button>
+
+          <p className="text-center text-[11px] text-slate-400">
+            By continuing, you agree to Rapidify's Terms of Service and Privacy Policy.
+          </p>
         </form>
       </div>
     </div>

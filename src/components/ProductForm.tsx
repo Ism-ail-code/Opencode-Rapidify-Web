@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { Trash2, Upload, X, Smartphone, Scan, FileWarning, Sparkles, Check } from "lucide-react";
 import QRCode from "qrcode";
+import { supabase } from "@/integrations/supabase/client";
 
 type ProductInput = {
   title: string; slug?: string; description?: string | null;
@@ -34,6 +35,8 @@ export function ProductForm({ initial, onSubmit, onDelete }: {
     status: (initial?.status as "draft" | "active" | "archived") ?? "active",
   });
   const [saving, setSaving] = useState(false);
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
+  const [dragOverField, setDragOverField] = useState<string | null>(null);
   const [fileUploads, setFileUploads] = useState<FileUpload[]>([]);
   const [aiPhotos, setAiPhotos] = useState<File[]>([]);
   const [aiPhotoPreviews, setAiPhotoPreviews] = useState<string[]>([]);
@@ -77,23 +80,53 @@ export function ProductForm({ initial, onSubmit, onDelete }: {
     return true;
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, bucket: "thumbnails" | "models", field: "thumbnail_url" | "model_glb_url" | "model_usdz_url") => {
+  const uploadToStorage = async (file: File, bucket: "thumbnails" | "models"): Promise<string> => {
+    const ext = file.name.split(".").pop() || "bin";
+    const path = `${bucket}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+    const { error } = await supabase.storage.from(bucket).upload(path, file, {
+      contentType: file.type || (ext === "glb" ? "model/gltf-binary" : ext === "usdz" ? "model/usdz" : "application/octet-stream"),
+      upsert: false,
+    });
+    if (error) throw new Error(`Upload failed: ${error.message}`);
+    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(path);
+    return urlData.publicUrl;
+  };
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>, bucket: "thumbnails" | "models", field: "thumbnail_url" | "model_glb_url" | "model_usdz_url") => {
     const file = event.target.files?.[0];
     if (!file) return;
     try {
       validateFile(file, bucket);
-      const preview = URL.createObjectURL(file);
-      setFileUploads(prev => [...prev, { file, preview, bucket, field }]);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setForm(prev => ({ ...prev, [field]: e.target?.result as string }));
-      };
-      reader.readAsDataURL(file);
+      setUploadingField(field);
+      const publicUrl = await uploadToStorage(file, bucket);
+      setForm(prev => ({ ...prev, [field]: publicUrl }));
+      setFileUploads(prev => [...prev, { file, preview: publicUrl, bucket, field }]);
     } catch (error) {
-      alert(error instanceof Error ? error.message : "Invalid file");
+      alert(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      setUploadingField(null);
+      event.target.value = "";
     }
-    event.target.value = "";
   };
+
+  const handleDrop = useCallback(async (event: React.DragEvent<HTMLDivElement>, bucket: "thumbnails" | "models", field: "thumbnail_url" | "model_glb_url" | "model_usdz_url") => {
+    event.preventDefault();
+    event.stopPropagation();
+    setDragOverField(null);
+    const file = event.dataTransfer.files?.[0];
+    if (!file) return;
+    try {
+      validateFile(file, bucket);
+      setUploadingField(field);
+      const publicUrl = await uploadToStorage(file, bucket);
+      setForm(prev => ({ ...prev, [field]: publicUrl }));
+      setFileUploads(prev => [...prev, { file, preview: publicUrl, bucket, field }]);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Upload failed");
+    } finally {
+      setUploadingField(null);
+    }
+  }, []);
 
   const handleAiPhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []);
@@ -235,24 +268,44 @@ export function ProductForm({ initial, onSubmit, onDelete }: {
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Direct 3D File Upload</p>
 
           {/* GLB Upload */}
-          <div>
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOverField("model_glb_url"); }}
+            onDragLeave={() => setDragOverField(null)}
+            onDrop={(e) => handleDrop(e, "models", "model_glb_url")}
+          >
             <input ref={glbInputRef} type="file" accept=".glb,.gltf,.stl,.obj" className="hidden"
               onChange={(e) => handleFileUpload(e, "models", "model_glb_url")} />
             <button type="button" onClick={() => glbInputRef.current?.click()}
-              className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium transition hover:bg-muted flex items-center justify-center gap-2">
+              className={`w-full rounded-lg border px-4 py-3 text-sm font-medium transition flex items-center justify-center gap-2 ${
+                dragOverField === "model_glb_url"
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-border bg-background hover:bg-muted"
+              }`}
+              disabled={!!uploadingField}>
               <Upload className="h-4 w-4" />
-              {form.model_glb_url ? "Replace GLB Model" : "Drop GLB file here or click to browse"}
+              {uploadingField === "model_glb_url" ? "Uploading..." :
+               form.model_glb_url ? "Replace GLB Model" : "Drop GLB file here or click to browse"}
             </button>
           </div>
 
           {/* USDZ Upload */}
-          <div>
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOverField("model_usdz_url"); }}
+            onDragLeave={() => setDragOverField(null)}
+            onDrop={(e) => handleDrop(e, "models", "model_usdz_url")}
+          >
             <input ref={usdzInputRef} type="file" accept=".usdz" className="hidden"
               onChange={(e) => handleFileUpload(e, "models", "model_usdz_url")} />
             <button type="button" onClick={() => usdzInputRef.current?.click()}
-              className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium transition hover:bg-muted flex items-center justify-center gap-2">
+              className={`w-full rounded-lg border px-4 py-3 text-sm font-medium transition flex items-center justify-center gap-2 ${
+                dragOverField === "model_usdz_url"
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-border bg-background hover:bg-muted"
+              }`}
+              disabled={!!uploadingField}>
               <Upload className="h-4 w-4" />
-              {form.model_usdz_url ? "Replace USDZ Model" : "Drop USDZ file here (iOS Quick Look)"}
+              {uploadingField === "model_usdz_url" ? "Uploading..." :
+               form.model_usdz_url ? "Replace USDZ Model" : "Drop USDZ file here (iOS Quick Look)"}
             </button>
           </div>
 
@@ -309,13 +362,25 @@ export function ProductForm({ initial, onSubmit, onDelete }: {
         {/* Thumbnail Upload */}
         <div className="mb-4">
           <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Product Thumbnail</p>
-          <input ref={thumbnailInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
-            onChange={(e) => handleFileUpload(e, "thumbnails", "thumbnail_url")} />
-          <button type="button" onClick={() => thumbnailInputRef.current?.click()}
-            className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium transition hover:bg-muted flex items-center justify-center gap-2">
-            <Upload className="h-4 w-4" />
-            {form.thumbnail_url ? "Replace Thumbnail" : "Upload thumbnail image (max 10MB)"}
-          </button>
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOverField("thumbnail_url"); }}
+            onDragLeave={() => setDragOverField(null)}
+            onDrop={(e) => handleDrop(e, "thumbnails", "thumbnail_url")}
+          >
+            <input ref={thumbnailInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+              onChange={(e) => handleFileUpload(e, "thumbnails", "thumbnail_url")} />
+            <button type="button" onClick={() => thumbnailInputRef.current?.click()}
+              className={`w-full rounded-lg border px-4 py-3 text-sm font-medium transition flex items-center justify-center gap-2 ${
+                dragOverField === "thumbnail_url"
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-border bg-background hover:bg-muted"
+              }`}
+              disabled={!!uploadingField}>
+              <Upload className="h-4 w-4" />
+              {uploadingField === "thumbnail_url" ? "Uploading..." :
+               form.thumbnail_url ? "Replace Thumbnail" : "Upload thumbnail image (max 10MB)"}
+            </button>
+          </div>
           {form.thumbnail_url && (
             <div className="mt-2 relative">
               <img src={form.thumbnail_url} alt="Thumbnail" className="w-full h-28 object-cover rounded-lg" />
@@ -371,13 +436,24 @@ export function ProductForm({ initial, onSubmit, onDelete }: {
       {!aiPhotos.length && !form.thumbnail_url && (
         <div className="rounded-xl border border-border bg-card p-5">
           <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">Product Thumbnail</p>
-          <input ref={thumbnailInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
-            onChange={(e) => handleFileUpload(e, "thumbnails", "thumbnail_url")} />
-          <button type="button" onClick={() => thumbnailInputRef.current?.click()}
-            className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm font-medium transition hover:bg-muted flex items-center justify-center gap-2">
-            <Upload className="h-4 w-4" />
-            Upload thumbnail image
-          </button>
+          <div
+            onDragOver={(e) => { e.preventDefault(); setDragOverField("thumbnail_url"); }}
+            onDragLeave={() => setDragOverField(null)}
+            onDrop={(e) => handleDrop(e, "thumbnails", "thumbnail_url")}
+          >
+            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+              onChange={(e) => handleFileUpload(e, "thumbnails", "thumbnail_url")} ref={thumbnailInputRef} />
+            <button type="button" onClick={() => thumbnailInputRef.current?.click()}
+              className={`w-full rounded-lg border px-4 py-3 text-sm font-medium transition flex items-center justify-center gap-2 ${
+                dragOverField === "thumbnail_url"
+                  ? "border-blue-500 bg-blue-50 text-blue-700"
+                  : "border-border bg-background hover:bg-muted"
+              }`}
+              disabled={!!uploadingField}>
+              <Upload className="h-4 w-4" />
+              {uploadingField === "thumbnail_url" ? "Uploading..." : "Upload thumbnail image"}
+            </button>
+          </div>
           {form.thumbnail_url && (
             <div className="mt-2 relative">
               <img src={form.thumbnail_url} alt="Thumbnail" className="w-full h-28 object-cover rounded-lg" />
@@ -392,9 +468,9 @@ export function ProductForm({ initial, onSubmit, onDelete }: {
 
       {/* Submit */}
       <div className="flex items-center justify-between gap-3">
-        <button type="submit" disabled={saving}
+        <button type="submit" disabled={saving || !!uploadingField}
           className="rounded-lg bg-foreground px-6 py-2.5 text-sm font-medium text-background transition hover:opacity-90 disabled:opacity-60">
-          {saving ? "Saving..." : isExisting ? "Update product" : "Create product"}
+          {uploadingField ? "Uploading file..." : saving ? "Saving..." : isExisting ? "Update product" : "Create product"}
         </button>
         {onDelete && (
           <button type="button" onClick={onDelete}

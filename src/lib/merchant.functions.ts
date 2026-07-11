@@ -28,6 +28,9 @@ export interface OnboardingInput {
   corporateTitle: string;
   brandName: string;
   storeDomain: string;
+  platform?: string;
+  apiSecretKey?: string;
+  businessRegId?: string;
 }
 
 export const completeOnboarding = createServerFn({ method: "POST" })
@@ -85,6 +88,11 @@ export const completeOnboarding = createServerFn({ method: "POST" })
 
     // 2. Create merchant
     const merchantId = crypto.randomUUID();
+    const storeMetadata = JSON.stringify({
+      domain: data.storeDomain,
+      platform: data.platform || null,
+      businessRegId: data.businessRegId || null,
+    });
     const { error: merchantError } = await supabaseAdmin
       .from("merchants")
       .insert({
@@ -92,7 +100,7 @@ export const completeOnboarding = createServerFn({ method: "POST" })
         owner_id: userId,
         name: data.brandName,
         slug: finalSlug,
-        store_domain: data.storeDomain,
+        store_domain: storeMetadata,
       });
 
     if (merchantError) {

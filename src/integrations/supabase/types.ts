@@ -100,38 +100,56 @@ export type Database = {
       }
       processing_jobs: {
         Row: {
+          completed_at: string | null
           created_at: string
           error: string | null
           id: string
           input: Json | null
+          max_retries: number
           merchant_id: string | null
+          next_retry_at: string | null
           output: Json | null
           product_id: string | null
           provider: string
+          result: Json | null
+          retries: number
+          started_at: string | null
           status: Database["public"]["Enums"]["job_status"]
           updated_at: string
         }
         Insert: {
+          completed_at?: string | null
           created_at?: string
           error?: string | null
           id?: string
           input?: Json | null
+          max_retries?: number
           merchant_id?: string | null
+          next_retry_at?: string | null
           output?: Json | null
           product_id?: string | null
           provider?: string
+          result?: Json | null
+          retries?: number
+          started_at?: string | null
           status?: Database["public"]["Enums"]["job_status"]
           updated_at?: string
         }
         Update: {
+          completed_at?: string | null
           created_at?: string
           error?: string | null
           id?: string
           input?: Json | null
+          max_retries?: number
           merchant_id?: string | null
+          next_retry_at?: string | null
           output?: Json | null
           product_id?: string | null
           provider?: string
+          result?: Json | null
+          retries?: number
+          started_at?: string | null
           status?: Database["public"]["Enums"]["job_status"]
           updated_at?: string
         }
@@ -344,6 +362,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          last_sync_at: string | null
           merchant_id: string
           oauth_refresh_hash: string | null
           oauth_token_hash: string
@@ -356,6 +375,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          last_sync_at?: string | null
           merchant_id: string
           oauth_refresh_hash?: string | null
           oauth_token_hash?: string
@@ -368,6 +388,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          last_sync_at?: string | null
           merchant_id?: string
           oauth_refresh_hash?: string | null
           oauth_token_hash?: string
@@ -397,7 +418,7 @@ export type Database = {
           id: string
           image_urls: string[] | null
           mapped_product_id: string | null
-          metadata: import("./types").Json | null
+          metadata: Json | null
           price_cents: number | null
           status: string
           title: string
@@ -519,6 +540,93 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      used_nonces: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          nonce: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          nonce: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          nonce?: string
+        }
+        Relationships: []
+      }
+      audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          ip_address: string | null
+          metadata: Json | null
+          resource: string
+          resource_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          resource: string
+          resource_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          resource?: string
+          resource_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      asset_cache: {
+        Row: {
+          cached_path: string
+          checksum: string | null
+          content_type: string | null
+          created_at: string
+          expires_at: string
+          id: string
+          size_bytes: number | null
+          source_url: string
+        }
+        Insert: {
+          cached_path: string
+          checksum?: string | null
+          content_type?: string | null
+          created_at?: string
+          expires_at: string
+          id?: string
+          size_bytes?: number | null
+          source_url: string
+        }
+        Update: {
+          cached_path?: string
+          checksum?: string | null
+          content_type?: string | null
+          created_at?: string
+          expires_at?: string
+          id?: string
+          size_bytes?: number | null
+          source_url?: string
+        }
+        Relationships: []
       }
     }
     Views: {

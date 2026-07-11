@@ -11,7 +11,7 @@ export const getPublicProduct = createServerFn({ method: "GET" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: product, error } = await supabaseAdmin
       .from("products")
-      .select("id, slug, title, description, price_cents, currency, thumbnail_url, model_glb_url, model_usdz_url, buy_url, status, merchant_id")
+      .select("id, slug, title, description, price_cents, currency, model_glb_url, model_usdz_url, buy_url, status, merchant_id")
       .eq("slug", data.slug)
       .eq("status", "active")
       .maybeSingle();
@@ -30,7 +30,7 @@ export const getPublicProduct = createServerFn({ method: "GET" })
 
     const { data: variants } = await supabaseAdmin
       .from("product_variants")
-      .select("id, name, color_hex, model_glb_url, model_usdz_url, thumbnail_url, sort_order")
+      .select("id, name, color_hex, model_glb_url, model_usdz_url, sort_order")
       .eq("product_id", product.id)
       .order("sort_order", { ascending: true });
     return { product: { ...product, merchants: merchant }, variants: variants ?? [] };
@@ -40,7 +40,7 @@ export const listFeaturedProducts = createServerFn({ method: "GET" }).handler(as
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   const { data, error } = await supabaseAdmin
     .from("products")
-    .select("id, slug, title, thumbnail_url, price_cents, currency, merchant_id")
+    .select("id, slug, title, price_cents, currency, merchant_id")
     .eq("status", "active")
     .order("created_at", { ascending: false })
     .limit(12);
@@ -66,7 +66,7 @@ export const listMyProducts = createServerFn({ method: "GET" })
   .handler(async ({ context }) => {
     const { data, error } = await context.supabase
       .from("products")
-      .select("id, slug, title, status, thumbnail_url, price_cents, currency, updated_at, merchant_id")
+      .select("id, title, status, price_cents, currency, updated_at, merchant_id")
       .order("updated_at", { ascending: false });
     if (error) throw error;
     return data ?? [];

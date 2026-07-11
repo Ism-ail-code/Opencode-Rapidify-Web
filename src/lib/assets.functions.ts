@@ -107,7 +107,7 @@ export const getPreloadUrls = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const { data: products, error } = await supabaseAdmin
       .from("products")
-      .select("id, slug, title, thumbnail_url, model_glb_url, model_usdz_url")
+      .select("id, slug, title, model_glb_url, model_usdz_url")
       .in("id", data.productIds)
       .eq("status", "active");
 
@@ -116,7 +116,7 @@ export const getPreloadUrls = createServerFn({ method: "POST" })
     return (products || []).map(p => ({
       id: p.id,
       title: p.title,
-      thumbnail: p.thumbnail_url,
+      thumbnail: null,
       models: {
         glb: p.model_glb_url,
         usdz: p.model_usdz_url,

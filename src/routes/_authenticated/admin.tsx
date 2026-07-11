@@ -1,13 +1,25 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useSuspenseQuery, queryOptions, useQueryClient } from "@tanstack/react-query";
 import { DashboardShell } from "@/components/DashboardShell";
 import { getProcessingJobs, processJob } from "@/lib/jobs.functions";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 const opts = queryOptions({ queryKey: ["processing-jobs"], queryFn: () => getProcessingJobs() });
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — Rapidify" }, { name: "robots", content: "noindex" }] }),
+  beforeLoad: async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw redirect({ to: "/auth", search: { verify: undefined as string | undefined } });
+
+    const { data } = await supabase.rpc("has_role", {
+      _role: "admin",
+      _user_id: session.user.id,
+    });
+
+    if (!data) throw redirect({ to: "/dashboard", search: {} });
+  },
   component: AdminPage,
 });
 

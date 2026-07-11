@@ -35,10 +35,10 @@ function EditPage() {
   );
 
   const [embedCopied, setEmbedCopied] = useState(false);
-  const embedSnippet = `<script src="${typeof window !== "undefined" ? window.location.origin : "https://rapidify.app"}/embed.js"\n  data-merchant-slug="${product.slug}"\n  data-mount=".product-buy-button"\n  defer></script>`;
 
   const copyEmbed = async () => {
-    await navigator.clipboard.writeText(embedSnippet);
+    const snippet = `<script src="${typeof window !== "undefined" ? window.location.origin : "https://rapidify.app"}/embed.js"\n  data-merchant-slug="${product?.merchant_id ?? ""}"\n  data-external-sku="${product?.id ?? ""}"\n  data-mount=".product-buy-button"\n  defer></script>`;
+    await navigator.clipboard.writeText(snippet);
     setEmbedCopied(true);
     toast.success("Embed snippet copied");
     setTimeout(() => setEmbedCopied(false), 2000);
@@ -59,8 +59,8 @@ function EditPage() {
   return (
     <DashboardShell title={product.title}>
       <div className="mb-4 flex items-center gap-3">
-        <Link to="/p/$slug" params={{ slug: product.slug }} className="text-sm text-muted-foreground hover:text-foreground transition">
-          View public page →
+        <Link to="/products" className="text-sm text-muted-foreground hover:text-foreground transition">
+          ← Back to products
         </Link>
       </div>
 
@@ -115,7 +115,7 @@ function EditPage() {
               </button>
             </div>
             <pre className="overflow-x-auto rounded-lg bg-muted/50 p-3 text-[10px] leading-relaxed text-muted-foreground">
-              <code>{embedSnippet}</code>
+              <code>{`<script src="${typeof window !== "undefined" ? window.location.origin : "https://rapidify.app"}/embed.js"\n  data-merchant-slug="${product?.merchant_id ?? ""}"\n  data-external-sku="${product?.id ?? ""}"\n  data-mount=".product-buy-button"\n  defer></script>`}</code>
             </pre>
             <p className="mt-2 text-[10px] text-muted-foreground">Paste into your store's HTML where the AR button should appear.</p>
           </div>

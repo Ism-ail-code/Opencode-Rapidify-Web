@@ -1,8 +1,8 @@
 import { Link, useRouter } from "@tanstack/react-router";
 import { ReactNode } from "react";
-import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
+import { useQuery, queryOptions } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { LayoutDashboard, Package, BarChart3, Cog, Sparkles, LogOut, Store, Coins } from "lucide-react";
+import { LayoutDashboard, Package, BarChart3, Cog, Sparkles, LogOut, Store, Coins, Settings } from "lucide-react";
 import { getCreditBalance } from "@/lib/credits.functions";
 
 const creditOpts = queryOptions({
@@ -12,13 +12,14 @@ const creditOpts = queryOptions({
 
 export function DashboardShell({ children, title }: { children: ReactNode; title: string }) {
   const router = useRouter();
-  const { data: credits } = useSuspenseQuery(creditOpts);
+  const { data: credits } = useQuery(creditOpts);
   const items = [
     { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
     { to: "/products", label: "Products", icon: Package },
     { to: "/marketplace", label: "Marketplace", icon: Store },
     { to: "/analytics", label: "Analytics", icon: BarChart3 },
     { to: "/admin", label: "Admin", icon: Cog },
+    { to: "/settings", label: "Settings", icon: Settings },
   ] as const;
   return (
     <div className="min-h-screen">
@@ -42,7 +43,7 @@ export function DashboardShell({ children, title }: { children: ReactNode; title
               <Coins className="h-3.5 w-3.5" />
               <span>Credits</span>
             </div>
-            <p className="mt-1 text-lg font-semibold tabular-nums">{credits.balance}</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">{credits?.balance ?? 0}</p>
           </div>
 
           <button

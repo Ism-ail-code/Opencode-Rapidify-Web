@@ -146,7 +146,7 @@ async function failJob(jobId: string, merchantId: string, errorMessage?: string)
     .from("processing_jobs")
     .update({
       status: "failed",
-      error_message: errorMessage || "Processing failed",
+      error: errorMessage || "Processing failed",
       completed_at: now.toISOString(),
       updated_at: now.toISOString(),
     })
@@ -176,7 +176,7 @@ async function retryJob(jobId: string, merchantId: string) {
       status: "queued",
       retries: job.retries + 1,
       next_retry_at: nextRetryAt.toISOString(),
-      error_message: null,
+      error: null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", jobId)
@@ -230,7 +230,7 @@ export const requeueDeadLetterJob = createServerFn({ method: "POST" })
           status: "queued",
           retries: job.retries + 1,
           next_retry_at: nextRetryAt.toISOString(),
-          error_message: null,
+          error: null,
           updated_at: new Date().toISOString(),
         })
         .eq("id", data.job_id)

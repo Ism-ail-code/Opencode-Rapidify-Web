@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Sparkles, CheckCircle, ArrowLeft, Mail } from "lucide-react";
+import { Sparkles, CheckCircle, ArrowLeft, Mail, Info } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -31,6 +31,7 @@ function AuthPage() {
   const [resetEmail, setResetEmail] = useState("");
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
+  const [unregisteredNotice, setUnregisteredNotice] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -51,6 +52,7 @@ function AuthPage() {
     setSignupSuccess(false);
     setForgotPassword(false);
     setResetSent(false);
+    setUnregisteredNotice(false);
   }
 
   async function handleGoogleOAuth() {
@@ -108,15 +110,28 @@ function AuthPage() {
 
         if (data.user && !data.session) {
           setSignupSuccess(true);
+          setUnregisteredNotice(false);
           resetForm();
           toast.success("Check your email for the verification link!");
         } else if (data.session) {
+          setUnregisteredNotice(false);
           toast.success("Account created! Welcome to Rapidify!");
           navigate({ to: "/dashboard", replace: true });
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        if (error) {
+          const msg = error.message.toLowerCase();
+          if (msg.includes("invalid login credentials") || msg.includes("user not found") || msg.includes("invalid email")) {
+            setUnregisteredNotice(true);
+            setMode("signup");
+            setSignupSuccess(false);
+            setForgotPassword(false);
+            setResetSent(false);
+            return;
+          }
+          throw error;
+        }
 
         if (data.user && !data.user.email_confirmed_at) {
           toast.error("Please verify your email before signing in. Check your inbox.");
@@ -337,6 +352,24 @@ function AuthPage() {
             <span className="bg-card px-2 text-muted-foreground">or</span>
           </div>
         </div>
+
+        {/* Unregistered Email Notice */}
+        {unregisteredNotice && (
+          <div className="mb-4 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+            <div>
+              <p className="text-sm font-medium text-blue-800">This email is not registered yet.</p>
+              <p className="mt-0.5 text-xs text-blue-600">Redirecting you to account creation — your email is preserved below.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setUnregisteredNotice(false)}
+              className="ml-auto shrink-0 text-blue-400 hover:text-blue-600"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {/* Email/Password Form */}
         <form onSubmit={submit} className="space-y-4">
