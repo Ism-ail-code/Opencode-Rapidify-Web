@@ -546,18 +546,21 @@ export type Database = {
           created_at: string
           expires_at: string
           id: string
+          merchant_id: string | null
           nonce: string
         }
         Insert: {
           created_at?: string
           expires_at: string
           id?: string
+          merchant_id?: string | null
           nonce: string
         }
         Update: {
           created_at?: string
           expires_at?: string
           id?: string
+          merchant_id?: string | null
           nonce?: string
         }
         Relationships: []
@@ -568,6 +571,7 @@ export type Database = {
           created_at: string
           id: string
           ip_address: string | null
+          merchant_id: string | null
           metadata: Json | null
           resource: string
           resource_id: string | null
@@ -578,6 +582,7 @@ export type Database = {
           created_at?: string
           id?: string
           ip_address?: string | null
+          merchant_id?: string | null
           metadata?: Json | null
           resource: string
           resource_id?: string | null
@@ -588,6 +593,7 @@ export type Database = {
           created_at?: string
           id?: string
           ip_address?: string | null
+          merchant_id?: string | null
           metadata?: Json | null
           resource?: string
           resource_id?: string | null
@@ -603,6 +609,7 @@ export type Database = {
           created_at: string
           expires_at: string
           id: string
+          merchant_id: string | null
           size_bytes: number | null
           source_url: string
         }
@@ -613,6 +620,7 @@ export type Database = {
           created_at?: string
           expires_at: string
           id?: string
+          merchant_id?: string | null
           size_bytes?: number | null
           source_url: string
         }
@@ -623,10 +631,130 @@ export type Database = {
           created_at?: string
           expires_at?: string
           id?: string
+          merchant_id?: string | null
           size_bytes?: number | null
           source_url?: string
         }
         Relationships: []
+      }
+      webhook_events: {
+        Row: {
+          created_at: string
+          error: string | null
+          event_type: string
+          headers: Json | null
+          id: string
+          merchant_id: string | null
+          payload: Json
+          platform: string
+          processed: boolean
+          signature: string
+          topic: string
+          verified: boolean
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          event_type?: string
+          headers?: Json | null
+          id?: string
+          merchant_id?: string | null
+          payload: Json
+          platform: string
+          processed?: boolean
+          signature?: string
+          topic?: string
+          verified?: boolean
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          event_type?: string
+          headers?: Json | null
+          id?: string
+          merchant_id?: string | null
+          payload?: Json
+          platform?: string
+          processed?: boolean
+          signature?: string
+          topic?: string
+          verified?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_events_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      attribution_sessions: {
+        Row: {
+          ar_session_duration_seconds: number | null
+          created_at: string
+          first_seen_at: string
+          had_add_to_cart: boolean
+          had_ar_launch: boolean
+          had_ar_widget: boolean
+          had_page_view: boolean
+          had_purchase: boolean
+          id: string
+          last_seen_at: string
+          merchant_id: string
+          product_id: string | null
+          revenue_cents: number
+          session_id: string
+        }
+        Insert: {
+          ar_session_duration_seconds?: number | null
+          created_at?: string
+          first_seen_at?: string
+          had_add_to_cart?: boolean
+          had_ar_launch?: boolean
+          had_ar_widget?: boolean
+          had_page_view?: boolean
+          had_purchase?: boolean
+          id?: string
+          last_seen_at?: string
+          merchant_id: string
+          product_id?: string | null
+          revenue_cents?: number
+          session_id: string
+        }
+        Update: {
+          ar_session_duration_seconds?: number | null
+          created_at?: string
+          first_seen_at?: string
+          had_add_to_cart?: boolean
+          had_ar_launch?: boolean
+          had_ar_widget?: boolean
+          had_page_view?: boolean
+          had_purchase?: boolean
+          id?: string
+          last_seen_at?: string
+          merchant_id?: string
+          product_id?: string | null
+          revenue_cents?: number
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attribution_sessions_merchant_id_fkey"
+            columns: ["merchant_id"]
+            isOneToOne: false
+            referencedRelation: "merchants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attribution_sessions_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
@@ -663,6 +791,29 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      is_merchant_member: {
+        Args: {
+          _merchant_id: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      upsert_attribution_session: {
+        Args: {
+          _session_id: string
+          _merchant_id: string
+          _product_id?: string
+          _event_type?: string
+          _has_page_view?: boolean
+          _has_ar_widget?: boolean
+          _has_ar_launch?: boolean
+          _has_add_to_cart?: boolean
+          _has_purchase?: boolean
+          _revenue_cents?: number
+          _ar_session_seconds?: number
+        }
+        Returns: void
       }
     }
     Enums: {
