@@ -4,11 +4,11 @@ import { DashboardShell } from "@/components/DashboardShell";
 import { listMyProducts } from "@/lib/products.functions";
 import { getMyAnalytics, getAttributionSummary } from "@/lib/analytics.functions";
 import type { AttributionSummary } from "@/lib/analytics.functions";
-import { getMyMerchant, getMyProfile, claimDemoStore } from "@/lib/merchant.functions";
+import { getMyMerchant, getMyProfile } from "@/lib/merchant.functions";
 import { getProcessingJobs } from "@/lib/jobs.functions";
 import { Boxes, Eye, Sparkles, ShoppingBag, Hourglass, AlertTriangle, RefreshCw, Package, DollarSign, BarChart3, TrendingUp, Target, ShieldCheck, ShieldAlert, Globe, Link2 } from "lucide-react";
 import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
-import { useEffect, Component, type ReactNode, type ErrorInfo } from "react";
+import { Component, type ReactNode, type ErrorInfo } from "react";
 
 const analyticsOpts = queryOptions({ queryKey: ["my-analytics"], queryFn: () => getMyAnalytics() });
 const productsOpts = queryOptions({ queryKey: ["my-products"], queryFn: () => listMyProducts() });
@@ -355,14 +355,6 @@ function Dashboard() {
   const { data: merchant, isLoading: merchantLoading } = useQuery(merchantOpts);
   const qc = useQueryClient();
 
-  useEffect(() => {
-    if (!merchantLoading && !merchant) {
-      claimDemoStore()
-        .then(() => qc.invalidateQueries({ queryKey: ["my-merchant"] }))
-        .catch(console.error);
-    }
-  }, [merchant, merchantLoading]);
-
   if (merchantLoading) {
     return (
       <DashboardShell title="Welcome">
@@ -383,9 +375,16 @@ function Dashboard() {
           <Sparkles className="mx-auto mb-3 h-8 w-8 text-violet-400" />
           <h2 className="text-lg font-semibold">Welcome to Rapidify!</h2>
           <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
-            Finish setting up your profile under Settings to link your live catalog.
+            Complete your merchant profile to start using Rapidify.
           </p>
-          <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Link
+            to="/auth/onboarding"
+            search={{ verify: undefined }}
+            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-foreground px-6 py-2.5 text-sm font-medium text-background hover:opacity-90 transition"
+          >
+            Complete your merchant profile
+          </Link>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[
               { label: "Product views", value: "0", icon: Eye },
               { label: "AR launches", value: "0", icon: Sparkles },

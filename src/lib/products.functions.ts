@@ -64,9 +64,17 @@ export const listFeaturedProducts = createServerFn({ method: "GET" }).handler(as
 export const listMyProducts = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { data: merchant } = await context.supabase
+      .from("merchants")
+      .select("id")
+      .eq("owner_id", context.userId)
+      .maybeSingle();
+    if (!merchant) return [];
+
     const { data, error } = await context.supabase
       .from("products")
       .select("id, title, status, price_cents, currency, updated_at, merchant_id")
+      .eq("merchant_id", merchant.id)
       .order("updated_at", { ascending: false });
     if (error) throw error;
     return data ?? [];

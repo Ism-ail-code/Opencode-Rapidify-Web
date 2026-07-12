@@ -5,6 +5,18 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 export const getAnalyticsSummary = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { data: merchant } = await context.supabase
+      .from("merchants")
+      .select("id")
+      .eq("owner_id", context.userId)
+      .maybeSingle();
+    if (!merchant) {
+      return {
+        totalEvents: 0, last7Days: 0, last24Hours: 0, byType: {},
+        period: { from: new Date(Date.now() - 30 * 86400000).toISOString(), to: new Date().toISOString() },
+      };
+    }
+
     const cutoff30 = new Date(); cutoff30.setDate(cutoff30.getDate() - 30);
     const cutoff7 = new Date(); cutoff7.setDate(cutoff7.getDate() - 7);
     const cutoff1 = new Date(); cutoff1.setDate(cutoff1.getDate() - 1);
@@ -12,6 +24,7 @@ export const getAnalyticsSummary = createServerFn({ method: "GET" })
     const { data: events } = await context.supabase
       .from("analytics_events")
       .select("event_type, created_at")
+      .eq("merchant_id", merchant.id)
       .gte("created_at", cutoff30.toISOString());
 
     const list = events || [];
@@ -41,10 +54,18 @@ export const getAnalyticsSummary = createServerFn({ method: "GET" })
 export const getMyAnalytics = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { data: merchant } = await context.supabase
+      .from("merchants")
+      .select("id")
+      .eq("owner_id", context.userId)
+      .maybeSingle();
+    if (!merchant) return { totals: {}, days: [], recent: [] };
+
     const fourteenDaysAgo = new Date(); fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
     const { data: events } = await context.supabase
       .from("analytics_events")
       .select("event_type, created_at")
+      .eq("merchant_id", merchant.id)
       .gte("created_at", fourteenDaysAgo.toISOString())
       .order("created_at", { ascending: false });
 
@@ -71,10 +92,17 @@ export const getMyAnalytics = createServerFn({ method: "GET" })
 export const getMyJobs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { data: merchant } = await context.supabase
+      .from("merchants")
+      .select("id")
+      .eq("owner_id", context.userId)
+      .maybeSingle();
+    if (!merchant) return [];
+
     const { data, error } = await context.supabase
       .from("processing_jobs")
       .select("*")
-      .eq("merchant_id", context.userId)
+      .eq("merchant_id", merchant.id)
       .order("created_at", { ascending: false })
       .limit(20);
     if (error) throw error;
@@ -84,9 +112,19 @@ export const getMyJobs = createServerFn({ method: "GET" })
 export const getConversionFunnel = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { data: merchant } = await context.supabase
+      .from("merchants")
+      .select("id")
+      .eq("owner_id", context.userId)
+      .maybeSingle();
+    if (!merchant) {
+      return { funnel: { product_view: 0, ar_launch: 0, buy_click: 0, qr_open: 0, embed_open: 0, variant_switch: 0 }, conversionRate: "0.0%", totalEvents: 0 };
+    }
+
     const { data: events } = await context.supabase
       .from("analytics_events")
       .select("event_type, created_at")
+      .eq("merchant_id", merchant.id)
       .order("created_at", { ascending: false })
       .limit(5000);
 
@@ -123,12 +161,20 @@ export const getPerProductAnalytics = createServerFn({ method: "GET" })
     days: z.number().int().min(1).max(90).default(30),
   }).parse(d))
   .handler(async ({ data, context }) => {
+    const { data: merchant } = await context.supabase
+      .from("merchants")
+      .select("id")
+      .eq("owner_id", context.userId)
+      .maybeSingle();
+    if (!merchant) return [];
+
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - data.days);
 
     let query = context.supabase
       .from("analytics_events")
       .select("event_type, product_id, created_at, session_id")
+      .eq("merchant_id", merchant.id)
       .gte("created_at", cutoff.toISOString());
 
     if (data.productId) {
@@ -281,11 +327,21 @@ function formatDuration(seconds: number): string {
 export const getRealTimeAnalytics = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { data: merchant } = await context.supabase
+      .from("merchants")
+      .select("id")
+      .eq("owner_id", context.userId)
+      .maybeSingle();
+    if (!merchant) {
+      return { events: {}, totalRecent: 0, activeSessions: 0, timestamp: new Date().toISOString() };
+    }
+
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
 
     const { data: recentEvents, error } = await context.supabase
       .from("analytics_events")
       .select("event_type, product_id, created_at, session_id")
+      .eq("merchant_id", merchant.id)
       .gte("created_at", fifteenMinutesAgo)
       .order("created_at", { ascending: false })
       .limit(100);

@@ -15,28 +15,29 @@ export const createProcessingJob = createServerFn({ method: "POST" })
     input: z.record(z.unknown()),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    // Deduct credits before queueing
+    // Look up the merchant's actual UUID (not the auth user ID)
     const { data: merchant } = await context.supabase
       .from("merchants")
       .select("id")
       .eq("owner_id", context.userId)
       .maybeSingle();
 
-    if (merchant) {
-      const { data: ok } = await context.supabase.rpc("deduct_credits", {
-        _merchant_id: merchant.id,
-        _amount: CREDIT_COSTS.processing_job,
-        _reason: "processing_job",
-        _ref_id: data.product_id,
-      });
-      if (!ok) throw new Error("Insufficient credits for 3D generation");
-    }
+    if (!merchant) throw new Error("Merchant not found");
+
+    // Deduct credits before queueing
+    const { data: ok } = await context.supabase.rpc("deduct_credits", {
+      _merchant_id: merchant.id,
+      _amount: CREDIT_COSTS.processing_job,
+      _reason: "processing_job",
+      _ref_id: data.product_id,
+    });
+    if (!ok) throw new Error("Insufficient credits for 3D generation");
 
     const { data: job, error } = await context.supabase
       .from("processing_jobs")
       .insert({
         product_id: data.product_id,
-        merchant_id: context.userId,
+        merchant_id: merchant.id,
         provider: data.provider,
         status: "queued",
         input: data.input,
@@ -54,10 +55,19 @@ export const createProcessingJob = createServerFn({ method: "POST" })
 export const getProcessingJobs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    // Look up the merchant's actual UUID
+    const { data: merchant } = await context.supabase
+      .from("merchants")
+      .select("id")
+      .eq("owner_id", context.userId)
+      .maybeSingle();
+
+    if (!merchant) return [];
+
     const { data, error } = await context.supabase
       .from("processing_jobs")
       .select("*")
-      .eq("merchant_id", context.userId)
+      .eq("merchant_id", merchant.id)
       .order("created_at", { ascending: false })
       .limit(50);
     
@@ -73,18 +83,26 @@ export const processJob = createServerFn({ method: "POST" })
     error_message: z.string().optional(),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const job = await getJobById(data.job_id, context.userId);
+    const { data: merchant } = await context.supabase
+      .from("merchants")
+      .select("id")
+      .eq("owner_id", context.userId)
+      .maybeSingle();
+    if (!merchant) throw new Error("Merchant not found");
+    const merchantId = merchant.id;
+
+    const job = await getJobById(data.job_id, merchantId);
     if (!job) throw new Error("Job not found");
     
     switch (data.action) {
       case "start":
-        await startJob(job.id, context.userId);
+        await startJob(job.id, merchantId);
         break;
       case "retry":
-        await retryJob(job.id, context.userId);
+        await retryJob(job.id, merchantId);
         break;
       case "fail":
-        await failJob(job.id, context.userId, data.error_message);
+        await failJob(job.id, merchantId, data.error_message);
         break;
     }
     
@@ -191,10 +209,17 @@ async function retryJob(jobId: string, merchantId: string) {
 export const getDeadLetterJobs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
+    const { data: merchant } = await context.supabase
+      .from("merchants")
+      .select("id")
+      .eq("owner_id", context.userId)
+      .maybeSingle();
+    if (!merchant) return [];
+
     const { data, error } = await supabaseAdmin
       .from("processing_jobs")
       .select("*")
-      .eq("merchant_id", context.userId)
+      .eq("merchant_id", merchant.id)
       .eq("status", "failed")
       .gte("retries", 5)
       .order("updated_at", { ascending: false })
@@ -210,11 +235,19 @@ export const requeueDeadLetterJob = createServerFn({ method: "POST" })
     job_id: z.string().uuid(),
   }).parse(d))
   .handler(async ({ data, context }) => {
+    const { data: merchant } = await context.supabase
+      .from("merchants")
+      .select("id")
+      .eq("owner_id", context.userId)
+      .maybeSingle();
+    if (!merchant) throw new Error("Merchant not found");
+    const merchantId = merchant.id;
+
     const { data: job, error } = await supabaseAdmin
       .from("processing_jobs")
       .select("*")
       .eq("id", data.job_id)
-      .eq("merchant_id", context.userId)
+      .eq("merchant_id", merchantId)
       .maybeSingle();
     
     if (error) throw error;
@@ -234,7 +267,7 @@ export const requeueDeadLetterJob = createServerFn({ method: "POST" })
           updated_at: new Date().toISOString(),
         })
         .eq("id", data.job_id)
-        .eq("merchant_id", context.userId)
+        .eq("merchant_id", merchantId)
         .select()
         .single();
       

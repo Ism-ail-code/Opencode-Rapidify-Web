@@ -63,7 +63,7 @@ function UpdatePasswordPage() {
 
       // Redirect to auth after a short delay so the user sees the success state
       setTimeout(() => {
-        navigate({ to: "/auth", replace: true });
+        navigate({ to: "/auth", search: { verify: undefined }, replace: true });
       }, 2500);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update password");
@@ -91,7 +91,7 @@ function UpdatePasswordPage() {
           </p>
           <div className="mt-6">
             <button
-              onClick={() => navigate({ to: "/auth", replace: true })}
+              onClick={() => navigate({ to: "/auth", search: { verify: undefined }, replace: true })}
               className="w-full rounded-lg bg-foreground py-2.5 text-sm font-medium text-background transition hover:opacity-90"
             >
               Back to sign in
@@ -121,7 +121,7 @@ function UpdatePasswordPage() {
           </p>
           <div className="mt-6">
             <button
-              onClick={() => navigate({ to: "/auth", replace: true })}
+              onClick={() => navigate({ to: "/auth", search: { verify: undefined }, replace: true })}
               className="w-full rounded-lg bg-foreground py-2.5 text-sm font-medium text-background transition hover:opacity-90"
             >
               Go to sign in
@@ -180,7 +180,7 @@ function UpdatePasswordPage() {
         </form>
         <p className="mt-4 text-center text-xs text-muted-foreground">
           <button
-            onClick={() => navigate({ to: "/auth", replace: true })}
+            onClick={() => navigate({ to: "/auth", search: { verify: undefined }, replace: true })}
             className="font-medium text-foreground hover:underline"
           >
             Back to sign in

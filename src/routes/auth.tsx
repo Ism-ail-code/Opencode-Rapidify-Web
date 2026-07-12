@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link, Outlet, useLocation } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -20,6 +20,7 @@ export const Route = createFileRoute("/auth")({
 
 function AuthPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { verify } = Route.useSearch();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
@@ -33,13 +34,21 @@ function AuthPage() {
   const [resetSent, setResetSent] = useState(false);
   const [unregisteredNotice, setUnregisteredNotice] = useState(false);
 
+  const isExactAuth = location.pathname === "/auth";
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) {
-        navigate({ to: "/dashboard", replace: true });
-      }
-    });
-  }, [navigate]);
+    if (isExactAuth) {
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session) {
+          navigate({ to: "/dashboard", replace: true });
+        }
+      });
+    }
+  }, [navigate, isExactAuth]);
+
+  if (!isExactAuth) {
+    return <Outlet />;
+  }
 
   function resetForm() {
     setEmail("");
@@ -207,7 +216,7 @@ function AuthPage() {
           </p>
           <div className="mt-6 space-y-3">
             <button
-              onClick={() => navigate({ to: "/auth", replace: true })}
+              onClick={() => navigate({ to: "/auth", search: { verify: undefined }, replace: true })}
               className="w-full rounded-lg bg-foreground py-2.5 text-sm font-medium text-background transition hover:opacity-90"
             >
               Back to sign in

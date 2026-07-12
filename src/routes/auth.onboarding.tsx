@@ -1,11 +1,26 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, Link, redirect } from "@tanstack/react-router";
 import { useState, useCallback } from "react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 import { Sparkles, Loader2, CheckCircle2, XCircle } from "lucide-react";
 import { completeOnboarding } from "@/lib/merchant.functions";
 import type { OnboardingInput } from "@/lib/merchant.functions";
 
 export const Route = createFileRoute("/auth/onboarding")({
+  beforeLoad: async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      throw redirect({ to: "/auth", search: { verify: undefined } });
+    }
+    const { data: members } = await supabase
+      .from("merchant_members")
+      .select("merchant_id")
+      .eq("user_id", session.user.id)
+      .limit(1);
+    if (members && members.length > 0) {
+      throw redirect({ to: "/dashboard" });
+    }
+  },
   head: () => ({
     meta: [
       { title: "Set up your store — Rapidify" },
@@ -26,6 +41,8 @@ const MARKETPLACE_OPTIONS = [
 function OnboardingPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [result, setResult] = useState<{ isVerified?: boolean } | null>(null);
 
   const [form, setForm] = useState({
     fullName: "",
@@ -60,8 +77,9 @@ function OnboardingPage() {
       if (!canSubmit) return;
 
       setLoading(true);
+      console.log("[onboarding] Submitting completeOnboarding with business:", form.businessName);
       try {
-        const result = await completeOnboarding({
+        const res = await completeOnboarding({
           data: {
             fullName: form.fullName.trim(),
             businessName: form.businessName.trim(),
@@ -76,17 +94,17 @@ function OnboardingPage() {
           },
         });
 
-        if (result.isVerified) {
-          toast.success("Business verified! Welcome to Rapidify.");
-        } else {
-          toast.success("Store created! Complete webhook setup to get verified.");
-        }
-
-        navigate({ to: "/dashboard", replace: true });
+        console.log("[onboarding] completeOnboarding succeeded:", JSON.stringify(res));
+        setResult(res);
+        setSuccess(true);
+        toast.success(res.isVerified ? "Business verified! Welcome to Rapidify." : "Store created! Complete webhook setup to get verified.");
       } catch (err) {
-        toast.error(
-          err instanceof Error ? err.message : "Something went wrong. Please try again."
-        );
+        const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
+        console.error("[onboarding] Submit FAILED:", err);
+        if (err instanceof Error && err.stack) {
+          console.error("[onboarding] Stack:", err.stack);
+        }
+        toast.error(message, { duration: 8000 });
       } finally {
         setLoading(false);
       }
@@ -99,9 +117,40 @@ function OnboardingPage() {
   const labelClass = "text-xs font-medium text-slate-600";
   const sectionClass = "rounded-xl border border-slate-200 p-5";
 
+  if (success) {
+    return (
+      <div className="grid min-h-screen place-items-center px-4 py-8 bg-[#F8FAFC]">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center">
+          <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-500" />
+          <h1 className="text-2xl font-semibold tracking-tight text-[#0F172A]">
+            All set!
+          </h1>
+          <p className="mt-2 text-sm text-slate-500">
+            {result?.isVerified
+              ? "Your business has been verified. Welcome to Rapidify!"
+              : "Your store has been created. Complete webhook setup to get verified."}
+          </p>
+          <button
+            onClick={() => navigate({ to: "/dashboard", replace: true })}
+            className="mt-6 w-full rounded-lg bg-[#0F172A] py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+          >
+            Go to dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid min-h-screen place-items-center px-4 py-8 bg-[#F8FAFC]">
-      <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+      <div className="relative w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
+        <button
+          type="button"
+          onClick={() => navigate({ to: "/dashboard" })}
+          className="text-sm text-slate-500 hover:text-[#0F172A] font-medium transition-colors duration-150 absolute top-6 right-6 flex items-center gap-1.5 cursor-pointer"
+        >
+          ← Go Back
+        </button>
         <Link
           to="/"
           className="mb-6 inline-flex items-center gap-2 text-sm text-slate-500 hover:text-[#0F172A]"
