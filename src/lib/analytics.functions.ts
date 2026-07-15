@@ -5,18 +5,6 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 export const getAnalyticsSummary = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data: merchant } = await context.supabase
-      .from("merchants")
-      .select("id")
-      .eq("owner_id", context.userId)
-      .maybeSingle();
-    if (!merchant) {
-      return {
-        totalEvents: 0, last7Days: 0, last24Hours: 0, byType: {},
-        period: { from: new Date(Date.now() - 30 * 86400000).toISOString(), to: new Date().toISOString() },
-      };
-    }
-
     const cutoff30 = new Date(); cutoff30.setDate(cutoff30.getDate() - 30);
     const cutoff7 = new Date(); cutoff7.setDate(cutoff7.getDate() - 7);
     const cutoff1 = new Date(); cutoff1.setDate(cutoff1.getDate() - 1);
@@ -24,7 +12,7 @@ export const getAnalyticsSummary = createServerFn({ method: "GET" })
     const { data: events } = await context.supabase
       .from("analytics_events")
       .select("event_type, created_at")
-      .eq("merchant_id", merchant.id)
+      .eq("business_id", context.userId)
       .gte("created_at", cutoff30.toISOString());
 
     const list = events || [];
@@ -54,32 +42,25 @@ export const getAnalyticsSummary = createServerFn({ method: "GET" })
 export const getMyAnalytics = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data: merchant } = await context.supabase
-      .from("merchants")
-      .select("id")
-      .eq("owner_id", context.userId)
-      .maybeSingle();
-    if (!merchant) return { totals: {}, days: [], recent: [] };
-
     const fourteenDaysAgo = new Date(); fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
     const { data: events } = await context.supabase
       .from("analytics_events")
       .select("event_type, created_at")
-      .eq("merchant_id", merchant.id)
+      .eq("business_id", context.userId)
       .gte("created_at", fourteenDaysAgo.toISOString())
       .order("created_at", { ascending: false });
 
     const list = events || [];
-    const totals: Record<string, number> = { product_view: 0, ar_launch: 0, buy_click: 0 };
+    const totals: Record<string, number> = { page_view: 0, product_view: 0, ar_launch: 0, add_to_cart: 0, purchase_completed: 0, buy_click: 0 };
     const dayMap: Record<string, { day: string; views: number; ar: number; buys: number }> = {};
 
     for (const e of list) {
       if (e.event_type in totals) totals[e.event_type]++;
       const dayKey = new Date(e.created_at).toISOString().slice(0, 10);
       if (!dayMap[dayKey]) dayMap[dayKey] = { day: dayKey, views: 0, ar: 0, buys: 0 };
-      if (e.event_type === "product_view") dayMap[dayKey].views++;
+      if (e.event_type === "product_view" || e.event_type === "page_view") dayMap[dayKey].views++;
       if (e.event_type === "ar_launch") dayMap[dayKey].ar++;
-      if (e.event_type === "buy_click") dayMap[dayKey].buys++;
+      if (e.event_type === "buy_click" || e.event_type === "add_to_cart") dayMap[dayKey].buys++;
     }
 
     return {
@@ -92,17 +73,10 @@ export const getMyAnalytics = createServerFn({ method: "GET" })
 export const getMyJobs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data: merchant } = await context.supabase
-      .from("merchants")
-      .select("id")
-      .eq("owner_id", context.userId)
-      .maybeSingle();
-    if (!merchant) return [];
-
     const { data, error } = await context.supabase
       .from("processing_jobs")
       .select("*")
-      .eq("merchant_id", merchant.id)
+      .eq("business_id", context.userId)
       .order("created_at", { ascending: false })
       .limit(20);
     if (error) throw error;
@@ -112,19 +86,10 @@ export const getMyJobs = createServerFn({ method: "GET" })
 export const getConversionFunnel = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data: merchant } = await context.supabase
-      .from("merchants")
-      .select("id")
-      .eq("owner_id", context.userId)
-      .maybeSingle();
-    if (!merchant) {
-      return { funnel: { product_view: 0, ar_launch: 0, buy_click: 0, qr_open: 0, embed_open: 0, variant_switch: 0 }, conversionRate: "0.0%", totalEvents: 0 };
-    }
-
     const { data: events } = await context.supabase
       .from("analytics_events")
       .select("event_type, created_at")
-      .eq("merchant_id", merchant.id)
+      .eq("business_id", context.userId)
       .order("created_at", { ascending: false })
       .limit(5000);
 
@@ -161,20 +126,13 @@ export const getPerProductAnalytics = createServerFn({ method: "GET" })
     days: z.number().int().min(1).max(90).default(30),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const { data: merchant } = await context.supabase
-      .from("merchants")
-      .select("id")
-      .eq("owner_id", context.userId)
-      .maybeSingle();
-    if (!merchant) return [];
-
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - data.days);
 
     let query = context.supabase
       .from("analytics_events")
       .select("event_type, product_id, created_at, session_id")
-      .eq("merchant_id", merchant.id)
+      .eq("business_id", context.userId)
       .gte("created_at", cutoff.toISOString());
 
     if (data.productId) {
@@ -212,14 +170,18 @@ export const getPerProductAnalytics = createServerFn({ method: "GET" })
     }
 
     const productIds = Object.keys(productStats);
-    const { data: products } = productIds.length > 0
-      ? await import("@/integrations/supabase/client.server").then(m => m.supabaseAdmin)
-          .from("products")
-          .select("id, title, slug, price_cents, currency")
-          .in("id", productIds)
-      : { data: [] };
+    let products: Array<{ id: string; title: string; slug: string; price_cents: number; currency: string }> = [];
+    if (productIds.length > 0) {
+      const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      const { data: productRows, error: productError } = await supabaseAdmin
+        .from("products")
+        .select("id, title, slug, price_cents, currency")
+        .in("id", productIds);
+      if (productError) throw productError;
+      products = productRows ?? [];
+    }
 
-    const productMap = new Map((products || []).map(p => [p.id, p]));
+    const productMap = new Map(products.map((product) => [product.id, product]));
 
     const result = Object.values(productStats).map(stat => {
       const product = productMap.get(stat.product_id);
@@ -262,46 +224,46 @@ export interface AttributionSummary {
 export const getAttributionSummary = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }): Promise<AttributionSummary> => {
-    const { data: merchant } = await context.supabase
-      .from("merchants")
-      .select("id")
-      .eq("owner_id", context.userId)
-      .maybeSingle();
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: events, error } = await context.supabase
+      .from("analytics_events")
+      .select("event_type, session_id, metadata")
+      .eq("business_id", context.userId)
+      .gte("created_at", cutoff)
+      .limit(10000);
+    if (error) throw error;
 
-    if (!merchant) {
-      return {
-        totalViews: 0, arLaunches: 0, arEngagementRate: "0.0",
-        addToCartAfterAr: 0, conversionRateAfterAr: "0.0",
-        estimatedRevenueInfluenced: 0, avgArSessionDuration: "0s",
-        totalSessions: 0, arSessions: 0, purchaseSessions: 0,
-      };
+    const sessions = new Map<string, { viewed: boolean; launched: boolean; added: boolean; purchased: boolean; revenue: number; arDuration: number }>();
+    for (const event of events ?? []) {
+      const sessionId = event.session_id || `event:${crypto.randomUUID()}`;
+      const session = sessions.get(sessionId) ?? { viewed: false, launched: false, added: false, purchased: false, revenue: 0, arDuration: 0 };
+      if (event.event_type === "page_view" || event.event_type === "product_view") session.viewed = true;
+      if (event.event_type === "ar_launch") session.launched = true;
+      if (event.event_type === "add_to_cart") session.added = true;
+      if (event.event_type === "purchase_completed") {
+        session.purchased = true;
+        const revenue = event.metadata && typeof event.metadata === "object" && "revenue_cents" in event.metadata
+          ? Number((event.metadata as Record<string, unknown>).revenue_cents)
+          : 0;
+        session.revenue += Number.isFinite(revenue) ? revenue : 0;
+      }
+      if (event.event_type === "ar_session_end") {
+        const duration = event.metadata && typeof event.metadata === "object" && "duration_seconds" in event.metadata
+          ? Number((event.metadata as Record<string, unknown>).duration_seconds)
+          : 0;
+        session.arDuration = Number.isFinite(duration) ? duration : session.arDuration;
+      }
+      sessions.set(sessionId, session);
     }
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-
-    const { data: sessions } = await supabaseAdmin
-      .from("attribution_sessions")
-      .select("*")
-      .eq("merchant_id", merchant.id)
-      .gte("last_seen_at", new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString());
-
-    const list: Array<{
-      had_page_view: boolean;
-      had_ar_widget: boolean;
-      had_ar_launch: boolean;
-      had_add_to_cart: boolean;
-      had_purchase: boolean;
-      revenue_cents: number;
-      ar_session_duration_seconds: number;
-    }> = (sessions ?? []) as any;
-
-    const totalViews = list.filter(s => s.had_page_view).length;
-    const arSessionRows = list.filter(s => s.had_ar_launch);
+    const list = [...sessions.values()];
+    const totalViews = list.filter((session) => session.viewed).length;
+    const arSessionRows = list.filter((session) => session.launched);
     const arLaunches = arSessionRows.length;
-    const addToCartAfterAr = arSessionRows.filter(s => s.had_add_to_cart).length;
-    const purchaseSessions = arSessionRows.filter(s => s.had_purchase).length;
-    const totalRevenue = arSessionRows.reduce((sum, s) => sum + (s.revenue_cents ?? 0), 0);
-    const totalArDuration = arSessionRows.reduce((sum, s) => sum + (s.ar_session_duration_seconds ?? 0), 0);
+    const addToCartAfterAr = arSessionRows.filter((session) => session.added).length;
+    const purchaseSessions = arSessionRows.filter((session) => session.purchased).length;
+    const totalRevenue = arSessionRows.reduce((sum, session) => sum + session.revenue, 0);
+    const totalArDuration = arSessionRows.reduce((sum, session) => sum + session.arDuration, 0);
 
     return {
       totalViews,
@@ -327,21 +289,12 @@ function formatDuration(seconds: number): string {
 export const getRealTimeAnalytics = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    const { data: merchant } = await context.supabase
-      .from("merchants")
-      .select("id")
-      .eq("owner_id", context.userId)
-      .maybeSingle();
-    if (!merchant) {
-      return { events: {}, totalRecent: 0, activeSessions: 0, timestamp: new Date().toISOString() };
-    }
-
     const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
 
     const { data: recentEvents, error } = await context.supabase
       .from("analytics_events")
       .select("event_type, product_id, created_at, session_id")
-      .eq("merchant_id", merchant.id)
+      .eq("business_id", context.userId)
       .gte("created_at", fifteenMinutesAgo)
       .order("created_at", { ascending: false })
       .limit(100);

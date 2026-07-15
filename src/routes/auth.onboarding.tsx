@@ -1,30 +1,64 @@
 import { createFileRoute, useNavigate, Link, redirect } from "@tanstack/react-router";
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { Sparkles, Loader2, CheckCircle2, XCircle } from "lucide-react";
-import { completeOnboarding } from "@/lib/merchant.functions";
+import { Sparkles, Loader2, CheckCircle2, AlertCircle, Zap } from "lucide-react";
+import { completeOnboarding, devQuickSetup } from "@/lib/merchant.functions";
 import type { OnboardingInput } from "@/lib/merchant.functions";
+
+const isDev = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEVELOPER_TOOLS === "true";
 
 export const Route = createFileRoute("/auth/onboarding")({
   beforeLoad: async () => {
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (!session) {
       throw redirect({ to: "/auth", search: { verify: undefined } });
     }
-    const { data: members } = await supabase
-      .from("merchant_members")
-      .select("merchant_id")
-      .eq("user_id", session.user.id)
-      .limit(1);
-    if (members && members.length > 0) {
+
+    let { data: profile, error } = await supabase
+      .from("business_profiles")
+      .select("id, onboarding_completed_at")
+      .eq("id", session.user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("[onboarding] Failed to read business profile", {
+        userId: session.user.id,
+        message: error.message,
+        code: error.code,
+      });
+    }
+
+    if (!profile?.onboarding_completed_at) {
+      // Fallback: check app_metadata (works even without custom tables)
+      if (session.user.app_metadata?.onboarding_completed_at) {
+        profile = { id: session.user.id, onboarding_completed_at: session.user.app_metadata.onboarding_completed_at as string };
+      } else {
+        // Fallback: check profiles table
+        const { data: fallbackProfile } = await supabase
+          .from("profiles")
+          .select("id, onboarding_completed_at")
+          .eq("id", session.user.id)
+          .maybeSingle();
+        if (fallbackProfile?.onboarding_completed_at) {
+          profile = fallbackProfile;
+        }
+      }
+    }
+
+    if (profile?.onboarding_completed_at) {
       throw redirect({ to: "/dashboard" });
     }
   },
   head: () => ({
     meta: [
       { title: "Set up your store — Rapidify" },
-      { name: "description", content: "Complete your business profile to get started with Rapidify." },
+      {
+        name: "description",
+        content: "Complete your business profile to get started with Rapidify.",
+      },
       { name: "robots", content: "noindex" },
     ],
   }),
@@ -42,8 +76,7 @@ function OnboardingPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [result, setResult] = useState<{ isVerified?: boolean } | null>(null);
-
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [form, setForm] = useState({
     fullName: "",
     businessName: "",
@@ -52,89 +85,95 @@ function OnboardingPage() {
     country: "",
     businessEmail: "",
     sellerId: "",
-    taxVatNumber: "",
-    estimatedMonthlyOrders: "",
-    webhookUrl: "",
   });
 
-  const update = (key: keyof typeof form, value: string) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const requiredFilled = !!(
+  const update = (key: keyof typeof form, value: string) =>
+    setForm((current) => ({ ...current, [key]: value }));
+  const requiredFilled = Boolean(
     form.fullName.trim() &&
     form.businessName.trim() &&
     form.storeDomain.trim() &&
     form.country.trim() &&
-    form.businessEmail.trim()
+    form.businessEmail.trim(),
   );
 
-  const canSubmit = requiredFilled && !loading;
+  async function handleQuickSetup() {
+    if (loading) return;
+    setLoading(true);
+    setSubmitError(null);
+    try {
+      const result = await devQuickSetup();
+      if (!result?.success) throw new Error("Demo setup failed. Please try again.");
+      toast.success("Demo workspace ready!");
+      // Refresh the session so route guards see the updated app_metadata
+      await supabase.auth.refreshSession();
+      navigate({ to: "/dashboard", replace: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Demo setup failed.";
+      console.error("[onboarding] dev quick setup failed", error);
+      setSubmitError(message);
+      toast.error(message, { duration: 8000 });
+    } finally {
+      setLoading(false);
+    }
+  }
 
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!canSubmit) return;
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!requiredFilled || loading) return;
 
-      setLoading(true);
-      console.log("[onboarding] Submitting completeOnboarding with business:", form.businessName);
-      try {
-        const res = await completeOnboarding({
-          data: {
-            fullName: form.fullName.trim(),
-            businessName: form.businessName.trim(),
-            marketplace: form.marketplace,
-            storeDomain: form.storeDomain.trim(),
-            country: form.country.trim(),
-            businessEmail: form.businessEmail.trim(),
-            sellerId: form.sellerId.trim() || undefined,
-            taxVatNumber: form.taxVatNumber.trim() || undefined,
-            estimatedMonthlyOrders: form.estimatedMonthlyOrders ? parseInt(form.estimatedMonthlyOrders, 10) : 0,
-            webhookUrl: form.webhookUrl.trim() || undefined,
-          },
-        });
+    setLoading(true);
+    setSubmitError(null);
+    try {
+      const result = await completeOnboarding({
+        data: {
+          fullName: form.fullName.trim(),
+          businessName: form.businessName.trim(),
+          marketplace: form.marketplace,
+          storeDomain: form.storeDomain.trim(),
+          country: form.country.trim(),
+          businessEmail: form.businessEmail.trim(),
+          sellerId: form.sellerId.trim(),
+        },
+      });
 
-        console.log("[onboarding] completeOnboarding succeeded:", JSON.stringify(res));
-        setResult(res);
-        setSuccess(true);
-        toast.success(res.isVerified ? "Business verified! Welcome to Rapidify." : "Store created! Complete webhook setup to get verified.");
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
-        console.error("[onboarding] Submit FAILED:", err);
-        if (err instanceof Error && err.stack) {
-          console.error("[onboarding] Stack:", err.stack);
-        }
-        toast.error(message, { duration: 8000 });
-      } finally {
-        setLoading(false);
-      }
-    },
-    [form, canSubmit, navigate]
-  );
+      if (!result?.success) throw new Error("Business profile was not saved. Please try again.");
+      setSuccess(true);
+      toast.success("Merchant profile saved. Your workspace is ready.");
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : "We could not save your merchant profile. Please try again.";
+      console.error("[onboarding] business_profiles insert/update failed", error);
+      setSubmitError(message);
+      toast.error(message, { duration: 8000 });
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const inputClass =
-    "w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-[#0F172A] outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20";
-  const labelClass = "text-xs font-medium text-slate-600";
-  const sectionClass = "rounded-xl border border-slate-200 p-5";
+    "mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20";
+  const labelClass = "text-xs font-medium text-slate-700";
 
   if (success) {
     return (
-      <div className="grid min-h-screen place-items-center px-4 py-8 bg-[#F8FAFC]">
-        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 shadow-sm text-center">
+      <div className="grid min-h-screen place-items-center bg-slate-50 px-4 py-8">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
           <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-emerald-500" />
-          <h1 className="text-2xl font-semibold tracking-tight text-[#0F172A]">
-            All set!
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
+            Your workspace is ready
           </h1>
-          <p className="mt-2 text-sm text-slate-500">
-            {result?.isVerified
-              ? "Your business has been verified. Welcome to Rapidify!"
-              : "Your store has been created. Complete webhook setup to get verified."}
+          <p className="mt-2 text-sm text-slate-600">
+            Your business profile and merchant workspace were saved successfully.
           </p>
           <button
+            type="button"
             onClick={() => navigate({ to: "/dashboard", replace: true })}
-            className="mt-6 w-full rounded-lg bg-[#0F172A] py-2.5 text-sm font-medium text-white transition hover:opacity-90"
+            className="mt-6 w-full rounded-lg bg-slate-950 py-2.5 text-sm font-medium text-white transition hover:opacity-90"
           >
-            Go to dashboard
+            Open dashboard
           </button>
         </div>
       </div>
@@ -142,192 +181,165 @@ function OnboardingPage() {
   }
 
   return (
-    <div className="grid min-h-screen place-items-center px-4 py-8 bg-[#F8FAFC]">
-      <div className="relative w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
-        <button
-          type="button"
-          onClick={() => navigate({ to: "/dashboard" })}
-          className="text-sm text-slate-500 hover:text-[#0F172A] font-medium transition-colors duration-150 absolute top-6 right-6 flex items-center gap-1.5 cursor-pointer"
-        >
-          ← Go Back
-        </button>
+    <div className="grid min-h-screen place-items-center bg-slate-50 px-4 py-8">
+      <div className="w-full max-w-xl rounded-2xl border border-slate-200 bg-white p-8 shadow-sm">
         <Link
           to="/"
-          className="mb-6 inline-flex items-center gap-2 text-sm text-slate-500 hover:text-[#0F172A]"
+          className="mb-6 inline-flex items-center gap-2 text-sm text-slate-600 hover:text-slate-950"
         >
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-[#0F172A] text-white">
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-slate-950 text-white">
             <Sparkles className="h-3.5 w-3.5" />
           </span>
           Rapidify
         </Link>
-
-        <h1 className="text-2xl font-semibold tracking-tight text-[#0F172A]">
-          Set up your business
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">
+          Set up your merchant profile
         </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Provide your business information to activate your merchant workspace.
+        <p className="mt-1 text-sm text-slate-600">
+          This information is used to create your isolated merchant workspace.
         </p>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-6">
-          {/* Business Information */}
-          <div className={sectionClass}>
-            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Business Information
-            </h2>
-            <div className="space-y-4">
-              <div>
-                <label className={labelClass}>
-                  Representative Name <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={form.fullName}
-                  onChange={(e) => update("fullName", e.target.value)}
-                  placeholder="Jane Doe"
-                  className={`mt-1 ${inputClass}`}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>
-                  Business Name <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={form.businessName}
-                  onChange={(e) => update("businessName", e.target.value)}
-                  placeholder="Acme Corp Pvt. Ltd."
-                  className={`mt-1 ${inputClass}`}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>
-                  Marketplace <span className="text-red-400">*</span>
-                </label>
-                <select
-                  required
-                  value={form.marketplace}
-                  onChange={(e) => update("marketplace", e.target.value)}
-                  className={`mt-1 ${inputClass}`}
-                >
-                  {MARKETPLACE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>
-                  Store URL <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="url"
-                  required
-                  value={form.storeDomain}
-                  onChange={(e) => update("storeDomain", e.target.value)}
-                  placeholder="https://mystore.com"
-                  className={`mt-1 ${inputClass}`}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>
-                  Country <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={form.country}
-                  onChange={(e) => update("country", e.target.value)}
-                  placeholder="Pakistan"
-                  className={`mt-1 ${inputClass}`}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>
-                  Business Email <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={form.businessEmail}
-                  onChange={(e) => update("businessEmail", e.target.value)}
-                  placeholder="contact@acmecorp.com"
-                  className={`mt-1 ${inputClass}`}
-                />
-              </div>
-            </div>
+        {submitError && (
+          <div
+            role="alert"
+            className="mt-5 flex gap-3 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+          >
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{submitError}</span>
           </div>
+        )}
 
-          {/* Optional Information */}
-          <div className={sectionClass}>
-            <h2 className="mb-4 text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Additional Information (Optional)
-            </h2>
-            <div className="space-y-4">
-              <div>
-                <label className={labelClass}>Seller ID</label>
-                <input
-                  type="text"
-                  value={form.sellerId}
-                  onChange={(e) => update("sellerId", e.target.value)}
-                  placeholder="SELLER123"
-                  className={`mt-1 ${inputClass}`}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Tax / VAT Number</label>
-                <input
-                  type="text"
-                  value={form.taxVatNumber}
-                  onChange={(e) => update("taxVatNumber", e.target.value)}
-                  placeholder="VAT-XX-XXXXXXX"
-                  className={`mt-1 ${inputClass}`}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Estimated Monthly Orders</label>
-                <input
-                  type="number"
-                  min="0"
-                  value={form.estimatedMonthlyOrders}
-                  onChange={(e) => update("estimatedMonthlyOrders", e.target.value)}
-                  placeholder="100"
-                  className={`mt-1 ${inputClass}`}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>Webhook URL (for auto-sync)</label>
-                <input
-                  type="url"
-                  value={form.webhookUrl}
-                  onChange={(e) => update("webhookUrl", e.target.value)}
-                  placeholder="https://mystore.com/webhooks/rapidify"
-                  className={`mt-1 ${inputClass}`}
-                />
-                <p className="mt-1 text-[11px] text-slate-400">
-                  If provided, we'll test connectivity during setup.
-                </p>
-              </div>
+        {isDev && (
+          <div className="mt-5 rounded-lg border border-dashed border-blue-300 bg-blue-50 p-4">
+            <div className="flex items-center gap-2 text-sm font-medium text-blue-800">
+              <Zap className="h-4 w-4" /> Developer quick setup
             </div>
+            <p className="mt-1 text-xs text-blue-600">
+              Skip the form and jump straight to the dashboard with demo data.
+            </p>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleQuickSetup}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700 disabled:opacity-50"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Setting up…
+                </>
+              ) : (
+                <>
+                  <Zap className="h-4 w-4" /> Quick Demo Setup
+                </>
+              )}
+            </button>
           </div>
+        )}
 
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+          <div>
+            <label className={labelClass}>
+              Representative Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              required
+              value={form.fullName}
+              onChange={(event) => update("fullName", event.target.value)}
+              placeholder="Jane Doe"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Business Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              required
+              value={form.businessName}
+              onChange={(event) => update("businessName", event.target.value)}
+              placeholder="Acme Commerce"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Marketplace <span className="text-red-500">*</span>
+            </label>
+            <select
+              required
+              value={form.marketplace}
+              onChange={(event) => update("marketplace", event.target.value)}
+              className={inputClass}
+            >
+              {MARKETPLACE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>
+              Store URL <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="url"
+              required
+              value={form.storeDomain}
+              onChange={(event) => update("storeDomain", event.target.value)}
+              placeholder="https://store.example.com"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Country <span className="text-red-500">*</span>
+            </label>
+            <input
+              required
+              value={form.country}
+              onChange={(event) => update("country", event.target.value)}
+              placeholder="Pakistan"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Business Email <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="email"
+              required
+              value={form.businessEmail}
+              onChange={(event) => update("businessEmail", event.target.value)}
+              placeholder="contact@example.com"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className={labelClass}>
+              Seller ID <span className="text-slate-400">(optional)</span>
+            </label>
+            <input
+              value={form.sellerId}
+              onChange={(event) => update("sellerId", event.target.value)}
+              placeholder="SELLER123"
+              className={inputClass}
+            />
+          </div>
           <button
             type="submit"
-            disabled={!canSubmit}
-            className="w-full rounded-lg bg-[#2563EB] py-3 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!requiredFilled || loading}
+            className="mt-2 flex w-full items-center justify-center rounded-lg bg-blue-600 py-3 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loading ? (
-              <span className="inline-flex items-center gap-2">
-                <Loader2 className="h-4 w-4 animate-spin" /> Verifying & setting up...
-              </span>
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Saving merchant profile…
+              </>
             ) : (
-              "Complete Setup"
+              "Complete setup"
             )}
           </button>
-
-          <p className="text-center text-[11px] text-slate-400">
-            By continuing, you agree to Rapidify's Terms of Service and Privacy Policy.
-          </p>
         </form>
       </div>
     </div>

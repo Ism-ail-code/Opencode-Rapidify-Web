@@ -3,14 +3,17 @@ import { useSuspenseQuery, queryOptions, useQueryClient } from "@tanstack/react-
 import { DashboardShell } from "@/components/DashboardShell";
 import { ProductForm } from "@/components/ProductForm";
 import { ARViewer } from "@/components/ARViewer";
+import { EmbedSnippet } from "@/components/EmbedSnippet";
 import { useServerFn } from "@tanstack/react-start";
 import { getMyProduct, upsertProduct, deleteProduct } from "@/lib/products.functions";
 import { getProcessingJobs } from "@/lib/jobs.functions";
+import { getMyMerchant } from "@/lib/merchant.functions";
 import { toast } from "sonner";
 import { useState } from "react";
-import { Code2, Check, Copy } from "lucide-react";
+import { ChevronDown, ChevronRight, Code2 } from "lucide-react";
 
 const opts = (id: string) => queryOptions({ queryKey: ["my-product", id], queryFn: () => getMyProduct({ data: { id } }) });
+const merchantOpts = queryOptions({ queryKey: ["my-merchant"], queryFn: () => getMyMerchant() });
 
 export const Route = createFileRoute("/_authenticated/products/$id")({
   head: () => ({ meta: [{ title: "Edit product — Rapidify" }, { name: "robots", content: "noindex" }] }),
@@ -20,11 +23,13 @@ export const Route = createFileRoute("/_authenticated/products/$id")({
 function EditPage() {
   const { id } = Route.useParams();
   const { data } = useSuspenseQuery(opts(id));
+  const { data: merchant } = useSuspenseQuery(merchantOpts);
   const navigate = useNavigate();
   const qc = useQueryClient();
   const save = useServerFn(upsertProduct);
   const del = useServerFn(deleteProduct);
   const product = data.product;
+  const merchantSlug = merchant?.slug || "";
 
   const { data: processingJobs } = useSuspenseQuery(
     queryOptions({
@@ -34,15 +39,7 @@ function EditPage() {
     })
   );
 
-  const [embedCopied, setEmbedCopied] = useState(false);
-
-  const copyEmbed = async () => {
-    const snippet = `<script src="${typeof window !== "undefined" ? window.location.origin : "https://rapidify.app"}/embed.js"\n  data-merchant-slug="${product?.merchant_id ?? ""}"\n  data-external-sku="${product?.id ?? ""}"\n  data-mount=".product-buy-button"\n  defer></script>`;
-    await navigator.clipboard.writeText(snippet);
-    setEmbedCopied(true);
-    toast.success("Embed snippet copied");
-    setTimeout(() => setEmbedCopied(false), 2000);
-  };
+  const [showPerProduct, setShowPerProduct] = useState(false);
 
   const getJobStatusColor = (status: string) => {
     switch (status) {
@@ -103,22 +100,32 @@ function EditPage() {
             </div>
           )}
 
-          {/* Embed Snippet */}
-          <div className="rounded-xl border border-border bg-card p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-                <Code2 className="h-3.5 w-3.5" /> Embed Code
-              </h3>
-              <button onClick={copyEmbed} className="flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[10px] font-medium text-muted-foreground hover:bg-foreground/10 transition-colors">
-                {embedCopied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                {embedCopied ? "Copied" : "Copy"}
+          {/* Global Embed Script (Recommended) */}
+          {merchantSlug && (
+            <EmbedSnippet merchantSlug={merchantSlug} />
+          )}
+
+          {/* Per-Product Embed Script (Advanced) */}
+          {merchantSlug && product.external_sku && (
+            <div className="rounded-xl border border-border bg-card">
+              <button
+                onClick={() => setShowPerProduct(!showPerProduct)}
+                className="flex w-full items-center gap-2 p-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted/30 transition-colors"
+              >
+                {showPerProduct ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                <Code2 className="h-3.5 w-3.5" />
+                Advanced: Per-Product Script
               </button>
+              {showPerProduct && (
+                <div className="px-4 pb-4">
+                  <EmbedSnippet merchantSlug={merchantSlug} externalSku={product.external_sku} productName={product.title} />
+                  <p className="mt-2 text-[10px] text-muted-foreground">
+                    Only use this if the global script's auto-detection does not work for this specific product.
+                  </p>
+                </div>
+              )}
             </div>
-            <pre className="overflow-x-auto rounded-lg bg-muted/50 p-3 text-[10px] leading-relaxed text-muted-foreground">
-              <code>{`<script src="${typeof window !== "undefined" ? window.location.origin : "https://rapidify.app"}/embed.js"\n  data-merchant-slug="${product?.merchant_id ?? ""}"\n  data-external-sku="${product?.id ?? ""}"\n  data-mount=".product-buy-button"\n  defer></script>`}</code>
-            </pre>
-            <p className="mt-2 text-[10px] text-muted-foreground">Paste into your store's HTML where the AR button should appear.</p>
-          </div>
+          )}
         </div>
       </div>
     </DashboardShell>

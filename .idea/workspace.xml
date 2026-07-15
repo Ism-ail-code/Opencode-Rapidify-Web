@@ -3,17 +3,36 @@
   <component name="ChangeListManager">
     <list default="true" id="35eb34d6-5e75-4c5d-9915-335edd462fb1" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/.env" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/.env" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/package.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/src/integrations/supabase/client.server.ts" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/src/integrations/supabase/client.server.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/src/lib/analytics.functions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/src/lib/analytics.functions.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/src/lib/config.server.ts" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/src/lib/config.server.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/src/lib/products.functions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/src/lib/products.functions.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/src/routeTree.gen.ts" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/src/routeTree.gen.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/src/routes/auth.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/src/routes/auth.tsx" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/src/workers/job-worker.ts" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/src/workers/job-worker.ts" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/ar-commerce-suite-new/src/workers/runner.ts" beforeDir="false" afterPath="$PROJECT_DIR$/ar-commerce-suite-new/src/workers/runner.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/public/embed.js" beforeDir="false" afterPath="$PROJECT_DIR$/public/embed.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/ARViewer.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/ARViewer.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/EmbedSnippet.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/EmbedSnippet.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/integrations/supabase/types.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/integrations/supabase/types.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/analytics.functions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/analytics.functions.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/collect.functions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/collect.functions.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/credits.functions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/credits.functions.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/embed.functions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/embed.functions.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/jobs.functions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/jobs.functions.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/marketplace.functions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/marketplace.functions.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/merchant.functions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/merchant.functions.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/products.functions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/products.functions.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/security.functions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/security.functions.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/storage.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/storage.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/track.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/track.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/upload.functions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/upload.functions.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/webhook-vendors.functions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/webhook-vendors.functions.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/lib/webhooks.functions.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/lib/webhooks.functions.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/routes/_authenticated/dashboard.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/_authenticated/dashboard.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/routes/_authenticated/products.$id.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/_authenticated/products.$id.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/routes/_authenticated/products.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/_authenticated/products.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/routes/_authenticated/route.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/_authenticated/route.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/routes/auth.callback.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/auth.callback.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/routes/auth.onboarding.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/auth.onboarding.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/routes/auth.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/auth.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/routes/index.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/index.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/routes/p.$slug.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/routes/p.$slug.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/server.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/server.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/start.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/start.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/workers/job-worker.ts" beforeDir="false" afterPath="$PROJECT_DIR$/src/workers/job-worker.ts" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -21,7 +40,7 @@
     <option name="LAST_RESOLUTION" value="IGNORE" />
   </component>
   <component name="Git.Settings">
-    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/ar-commerce-suite-new" />
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 4
@@ -39,7 +58,7 @@
     &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252&quot;: &quot;true&quot;,
     &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
     &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;C:/Users/hp/Documents/STARTUP/Lovable Project 2&quot;
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/hp/Documents/STARTUP/UNDER WORK PROJECTS/Lovable Project 2/ar-commerce-suite-new&quot;
   }
 }</component>
   <component name="RunManager">

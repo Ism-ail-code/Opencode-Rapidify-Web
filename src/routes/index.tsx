@@ -1,16 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useSuspenseQuery, queryOptions } from "@tanstack/react-query";
 import { SiteHeader } from "@/components/SiteHeader";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { listFeaturedProducts } from "@/lib/products.functions";
-import { ArrowRight, Boxes, BarChart3, Code2, QrCode, Sparkles, Zap } from "lucide-react";
+import { ArrowRight, Boxes, BarChart3, Code2, QrCode, Sparkles, Zap, Check } from "lucide-react";
 import { useState } from "react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-
-const featuredOpts = queryOptions({
-  queryKey: ["featured-products"],
-  queryFn: () => listFeaturedProducts(),
-});
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -23,12 +16,10 @@ export const Route = createFileRoute("/")({
     ],
     links: [{ rel: "canonical", href: "/" }],
   }),
-  loader: ({ context }) => { context.queryClient.ensureQueryData(featuredOpts); },
   component: Landing,
 });
 
 function Landing() {
-  const { data: featured } = useSuspenseQuery(featuredOpts);
   const isMobile = useIsMobile();
   const [billingCycle, setBillingCycle] = useState<"monthly" | "annual">("monthly");
 
@@ -37,23 +28,50 @@ function Landing() {
       name: "Starter",
       monthlyPrice: "Free",
       annualPrice: "Free",
-      desc: "Up to 5 products. Perfect for launch.",
+      desc: "Perfect for testing the waters. All core AR features included.",
       cta: "Start free",
+      features: [
+        "Up to 5 products",
+        "GLB & USDZ support",
+        "Public AR product pages",
+        "QR code generation",
+        "Embeddable widget",
+        "Basic analytics dashboard",
+        "Community support",
+      ],
     },
     {
       name: "Growth",
-      monthlyPrice: "$49/mo",
-      annualPrice: "$39/mo",
-      desc: "Unlimited products. Embed widget. Analytics.",
+      monthlyPrice: "$49",
+      annualPrice: "$39",
+      desc: "For growing brands that need full-scale AR commerce.",
       cta: "Start trial",
       featured: true,
+      features: [
+        "Unlimited products & variants",
+        "AI 2D-to-3D generation (Meshy/Tripo)",
+        "Full analytics suite with conversion funnel",
+        "Marketplace integrations (Daraz, Amazon, Shopify)",
+        "Multi-angle photo upload for AI pipeline",
+        "Priority processing queue",
+        "Email & chat support",
+      ],
     },
     {
       name: "Enterprise",
       monthlyPrice: "Custom",
       annualPrice: "Custom",
-      desc: "SAML SSO, dedicated support, custom AI pipeline.",
+      desc: "Tailored infrastructure for high-volume merchants and platforms.",
       cta: "Contact sales",
+      features: [
+        "Everything in Growth, plus:",
+        "SAML SSO & team role management",
+        "Custom AI pipeline & model training",
+        "Dedicated worker instances",
+        "Custom embed & white-label options",
+        "99.9% uptime SLA",
+        "Dedicated account manager & onboarding",
+      ],
     },
   ];
 
@@ -100,7 +118,7 @@ function Landing() {
             Upload a 3D model. Get a beautiful product page with View-in-AR on iOS &amp; Android, QR sharing, and an embeddable widget for your storefront — without writing a single line of native code.
           </p>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-            <Link to="/auth" className="rounded-lg btn-hero px-6 py-3 text-sm font-medium">
+            <Link to="/auth" search={{ verify: undefined }} className="rounded-lg btn-hero px-6 py-3 text-sm font-medium">
               Start free <ArrowRight className="ml-1 inline h-4 w-4" />
             </Link>
             {isMobile && (
@@ -132,35 +150,12 @@ function Landing() {
         </div>
       </section>
 
-      {/* FEATURED PRODUCTS */}
-      <section className="mx-auto max-w-6xl px-4 py-16">
-        <div className="mb-8 flex items-end justify-between">
-          <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">Live AR product pages</h2>
-          <Link to="/auth" className="text-sm text-muted-foreground hover:text-foreground">Build your own →</Link>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 md:grid-cols-3">
-          {featured.map((p) => (
-            <Link key={p.id} to="/p/$slug" params={{ slug: p.slug }} className="group overflow-hidden rounded-2xl glass transition hover:translate-y-[-2px]">
-              <div className="aspect-square overflow-hidden bg-muted">
-                {p.thumbnail_url ? (
-                  <img src={p.thumbnail_url} alt={p.title} className="h-full w-full object-cover transition group-hover:scale-105" />
-                ) : <div className="h-full w-full grid place-items-center text-muted-foreground"><Boxes className="h-8 w-8" /></div>}
-              </div>
-              <div className="p-4">
-                <div className="text-xs text-muted-foreground">{p.merchants?.name ?? "Demo store"}</div>
-                <div className="mt-1 flex items-center justify-between">
-                  <div className="font-medium">{p.title}</div>
-                  <div className="text-sm text-muted-foreground">${(p.price_cents / 100).toFixed(0)}</div>
-                </div>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
       {/* PRICING */}
       <section id="pricing" className="mx-auto max-w-6xl px-4 py-20">
         <h2 className="text-center text-3xl font-semibold tracking-tight">Pricing built for growth</h2>
+        <p className="mx-auto mt-4 max-w-xl text-center text-sm text-muted-foreground">
+          Start free, scale as you grow. No hidden fees, no surprise charges.
+        </p>
         <div className="mt-6 flex items-center justify-center gap-2">
           <button
             onClick={() => setBillingCycle("monthly")}
@@ -175,13 +170,27 @@ function Landing() {
             Annual <span className="ml-1 text-xs opacity-70">Save 20%</span>
           </button>
         </div>
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
+        <div className="mt-10 grid gap-6 md:grid-cols-3">
           {pricingTiers.map((t) => (
-            <div key={t.name} className={`rounded-2xl glass p-6 ${t.featured ? "ring-1 ring-foreground/30" : ""}`}>
+            <div key={t.name} className={`flex flex-col rounded-2xl glass p-6 ${t.featured ? "ring-2 ring-foreground/30 scale-[1.02]" : ""}`}>
+              {t.featured && <div className="-mt-9 mb-4 text-center text-xs font-medium uppercase tracking-wider text-foreground">Most popular</div>}
               <div className="text-sm text-muted-foreground">{t.name}</div>
-              <div className="mt-2 text-3xl font-semibold">{billingCycle === "monthly" ? t.monthlyPrice : t.annualPrice}</div>
+              <div className="mt-2 flex items-baseline gap-1">
+                <span className="text-3xl font-semibold">{billingCycle === "monthly" ? t.monthlyPrice : t.annualPrice}</span>
+                {t.monthlyPrice !== "Free" && t.monthlyPrice !== "Custom" && <span className="text-sm text-muted-foreground">per month</span>}
+              </div>
               <p className="mt-2 text-sm text-muted-foreground">{t.desc}</p>
-              <Link to="/auth" className={`mt-6 block rounded-lg py-2.5 text-center text-sm font-medium ${t.featured ? "btn-hero" : "glass hover:bg-muted"}`}>{t.cta}</Link>
+              <ul className="mt-6 space-y-3 text-sm">
+                {t.features.map((f, i) => (
+                  <li key={i} className="flex items-start gap-2.5">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
+                    <span>{f}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-auto pt-8">
+                <Link to="/auth" search={{ verify: undefined }} className={`block rounded-lg py-2.5 text-center text-sm font-medium ${t.featured ? "btn-hero" : "glass hover:bg-muted"}`}>{t.cta}</Link>
+              </div>
             </div>
           ))}
         </div>

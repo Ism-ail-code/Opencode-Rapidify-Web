@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Sparkles, CheckCircle, ArrowLeft, Mail, Info } from "lucide-react";
+import { ensureBusinessProfile } from "@/lib/merchant.functions";
+import { getPostAuthDestination } from "@/lib/auth-routing";
 
 export const Route = createFileRoute("/auth")({
   head: () => ({
@@ -38,9 +40,10 @@ function AuthPage() {
 
   useEffect(() => {
     if (isExactAuth) {
-      supabase.auth.getSession().then(({ data }) => {
-        if (data.session) {
-          navigate({ to: "/dashboard", replace: true });
+      supabase.auth.getSession().then(async ({ data }) => {
+        if (data.session?.user) {
+          const destination = await getPostAuthDestination(data.session.user.id);
+          navigate({ to: destination, replace: true });
         }
       });
     }
@@ -122,10 +125,21 @@ function AuthPage() {
           setUnregisteredNotice(false);
           resetForm();
           toast.success("Check your email for the verification link!");
-        } else if (data.session) {
+        } else if (data.session?.user) {
+          // The auth.users trigger creates this row for every signup. This
+          // explicit, authenticated upsert is a second guard and makes any RLS
+          // failure visible before navigation can begin.
+          try {
+            await ensureBusinessProfile();
+          } catch (profileError) {
+            console.error("[signup] business_profiles insert failed", profileError);
+            toast.error(profileError instanceof Error ? profileError.message : "Account created, but your merchant profile could not be initialized.", { duration: 8000 });
+            return;
+          }
+
           setUnregisteredNotice(false);
-          toast.success("Account created! Welcome to Rapidify!");
-          navigate({ to: "/dashboard", replace: true });
+          toast.success("Account created! Tell us about your business to continue.");
+          navigate({ to: "/auth/onboarding", search: { verify: undefined }, replace: true });
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -149,7 +163,8 @@ function AuthPage() {
         }
 
         toast.success("Welcome back!");
-        navigate({ to: "/dashboard", replace: true });
+        const destination = await getPostAuthDestination(data.user.id);
+        navigate({ to: destination, search: destination === "/auth/onboarding" ? { verify: undefined } : undefined, replace: true });
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Authentication failed");

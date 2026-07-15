@@ -46,15 +46,33 @@ export const collectEvents = createServerFn({ method: "POST" })
     throw new Error("Invalid payload — expected {events:[...]} or {event_type:...}");
   })
   .handler(async ({ data }) => {
-    const rows = data.events.map((e) => ({
-      event_type: e.event_type,
-      session_id: e.session_id ?? null,
-      product_id: e.product_id ?? null,
-      merchant_id: e.merchant_id ?? null,
-      variant_id: e.variant_id ?? null,
-      metadata: e.metadata ?? null,
-      user_agent: null as string | null,
-    }));
+    const productIds = [...new Set(data.events.map((event) => event.product_id).filter((id): id is string => Boolean(id)))];
+    if (productIds.length === 0) return { ok: true, accepted: 0 };
+
+    const { data: products, error: productsError } = await supabaseAdmin
+      .from("products")
+      .select("id, merchant_id, business_id, status")
+      .in("id", productIds)
+      .eq("status", "active");
+    if (productsError) throw productsError;
+
+    const productMap = new Map((products ?? []).filter((product) => product.business_id).map((product) => [product.id, product]));
+    const rows = data.events.flatMap((event) => {
+      const product = event.product_id ? productMap.get(event.product_id) : undefined;
+      if (!product) return [];
+      return [{
+        event_type: event.event_type,
+        session_id: event.session_id ?? null,
+        product_id: product.id,
+        merchant_id: product.merchant_id,
+        business_id: product.business_id,
+        variant_id: event.variant_id ?? null,
+        metadata: (event.metadata ?? null) as never,
+        user_agent: null as string | null,
+      }];
+    });
+
+    if (rows.length === 0) return { ok: true, accepted: 0 };
 
     const { error, count } = await supabaseAdmin
       .from("analytics_events")

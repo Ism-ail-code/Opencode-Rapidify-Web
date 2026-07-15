@@ -17,6 +17,7 @@ const WEBHOOK_BASE_URL = process.env.WEBHOOK_BASE_URL ?? process.env.APP_URL ?? 
 // Types
 // ---------------------------------------------------------------------------
 interface ProcessingJob {
+  business_id: string | null;
   id: string;
   product_id: string;
   merchant_id: string;
@@ -87,7 +88,7 @@ async function completeJob(jobId: string, result: ProviderResult): Promise<void>
     .update({
       status: "ready",
       completed_at: now,
-      output: result as unknown as Record<string, unknown>,
+      output: result as never,
       updated_at: now,
     })
     .eq("id", jobId);
@@ -357,12 +358,23 @@ async function persistAssets(
   if (Object.keys(updatePayload).length > 0) {
     const { error } = await supabaseAdmin
       .from("products")
-      .update(updatePayload)
+      .update(updatePayload as never)
       .eq("id", product_id);
 
     if (error) {
       console.error(`[Worker] Failed to update product ${product_id}:`, error.message);
     }
+  }
+
+  if (job.business_id && (glbUrl || usdzUrl)) {
+    const { error: modelError } = await supabaseAdmin.from("models").upsert({
+      business_id: job.business_id,
+      product_id,
+      model_url: glbUrl || null,
+      usdz_url: usdzUrl || null,
+      status: "ready",
+    }, { onConflict: "business_id,product_id" });
+    if (modelError) console.error(`[Worker] Failed to mark model ready for ${product_id}:`, modelError.message);
   }
 
   return { ...result, glb_url: glbUrl, usdz_url: usdzUrl, thumbnail_url: thumbUrl };

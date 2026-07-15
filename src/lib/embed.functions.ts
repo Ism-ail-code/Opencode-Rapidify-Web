@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const trackEvent = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({
-    event_type: z.enum(["product_view", "ar_launch", "buy_click", "qr_open", "embed_open", "variant_switch", "session_start"]),
+    event_type: z.enum(["product_view", "page_view", "ar_widget_visible", "ar_launch", "ar_session_end", "add_to_cart", "purchase_completed", "buy_click", "qr_open", "embed_open", "variant_switch", "session_start"]),
     session_id: z.string().nullable().optional(),
     product_id: z.string().uuid().nullable().optional(),
     merchant_id: z.string().uuid().nullable().optional(),
@@ -13,24 +13,36 @@ export const trackEvent = createServerFn({ method: "POST" })
   }).parse(d))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    if (!data.product_id) return { ok: true, accepted: 0 };
+
+    // Do not trust a public browser to nominate a business. The product is the
+    // authority for both tenant IDs, preventing cross-tenant event injection.
+    const { data: product, error: productError } = await supabaseAdmin
+      .from("products")
+      .select("id, business_id, merchant_id, status")
+      .eq("id", data.product_id)
+      .eq("status", "active")
+      .maybeSingle();
+    if (productError) throw productError;
+    if (!product?.business_id) return { ok: true, accepted: 0 };
+
     const { error } = await supabaseAdmin.from("analytics_events").insert({
       event_type: data.event_type,
       session_id: data.session_id ?? null,
       product_id: data.product_id ?? null,
-      merchant_id: data.merchant_id ?? null,
+      merchant_id: product.merchant_id,
+      business_id: product.business_id,
       variant_id: data.variant_id ?? null,
-      metadata: (data.metadata ?? null) as unknown,
+      metadata: (data.metadata ?? null) as never,
       user_agent: null,
     });
     if (error) throw error;
-    return { ok: true };
+    return { ok: true, accepted: 1 };
   });
 
 /**
  * Resolves product metadata for the embed script.
- * Supports two lookup strategies:
- *   1. External SKU lookup via marketplace catalog (data-external-sku)
- *   2. Product slug lookup (data-merchant-slug)
+ * Supports lookup by SKU (optionally scoped to a merchant slug).
  *
  * The API route at /api/public/asset-meta is the public-facing endpoint.
  * This server function is used internally by getEmbedScript.
@@ -153,6 +165,27 @@ export const getPublicAssetMeta = createServerFn({ method: "GET" })
     return null;
   });
 
+/**
+ * Generates an embed script snippet.
+ *
+ * Two modes:
+ *   1. **Global script (recommended)** — Provide only `merchant_slug`.
+ *      The resulting snippet uses the `data-merchant` attribute and relies
+ *      on auto-detection of the product SKU from the page. One script works
+ *      for ALL products in the store.
+ *
+ *   2. **Per-product script** — Provide both `merchant_slug` and
+ *      `external_sku`. The snippet pins the product explicitly for stores
+ *      where auto-detection does not work.
+ *
+ * @example global
+ *   getEmbedScript({ merchant_slug: "alexs-furniture" })
+ *   // → <script src="/embed.js" data-merchant="alexs-furniture" defer></script>
+ *
+ * @example per-product
+ *   getEmbedScript({ merchant_slug: "alexs-furniture", external_sku: "CHAIR-001" })
+ *   // → <script src="/embed.js" data-merchant="alexs-furniture" data-external-sku="CHAIR-001" defer></script>
+ */
 export const getEmbedScript = createServerFn({ method: "GET" })
   .inputValidator((d: {
     merchant_slug: string;
@@ -164,11 +197,17 @@ export const getEmbedScript = createServerFn({ method: "GET" })
     mount_selector: z.string().min(1).max(120).default(".product-buy-button"),
   }).parse(d))
   .handler(async ({ data }) => {
-    const script = `<script src="/embed.js"
-  data-merchant-slug="${data.merchant_slug}"
-  ${data.external_sku ? `data-external-sku="${data.external_sku}"` : ""}
+    if (data.external_sku) {
+      return `<script src="/embed.js"
+  data-merchant="${data.merchant_slug}"
+  data-external-sku="${data.external_sku}"
   data-mount="${data.mount_selector}"
   defer></script>`;
-
-    return script;
+    }
+    // Global script — no product-specific attributes.
+    // Auto-detection picks up the product from the page.
+    return `<script src="/embed.js"
+  data-merchant="${data.merchant_slug}"
+  data-mount="${data.mount_selector}"
+  defer></script>`;
   });

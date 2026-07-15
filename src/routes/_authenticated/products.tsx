@@ -1,8 +1,9 @@
 import { createFileRoute, Link, Outlet, useMatchRoute } from "@tanstack/react-router";
-import { useQuery, queryOptions } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, queryOptions } from "@tanstack/react-query";
 import { DashboardShell } from "@/components/DashboardShell";
 import { listMyProducts } from "@/lib/products.functions";
 import { Plus, ExternalLink, AlertTriangle, Package } from "lucide-react";
+import { insertDemoProduct } from "@/lib/developer-tools.functions";
 
 const productsOpts = queryOptions({ queryKey: ["my-products"], queryFn: () => listMyProducts() });
 
@@ -20,6 +21,11 @@ function ProductsPage() {
 
 function List() {
   const { data, isLoading, isError } = useQuery(productsOpts);
+  const queryClient = useQueryClient();
+  const demoProduct = useMutation({
+    mutationFn: () => insertDemoProduct(),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["my-products"] }),
+  });
 
   if (isLoading) {
     return (
@@ -77,7 +83,16 @@ function List() {
             >
               <ExternalLink className="h-4 w-4" /> Sync Marketplace Feed
             </Link>
+            <button
+              type="button"
+              disabled={demoProduct.isPending}
+              onClick={() => demoProduct.mutate()}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-900 transition hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Package className="h-4 w-4" /> {demoProduct.isPending ? "Adding demo…" : "Add demo product"}
+            </button>
           </div>
+          {demoProduct.isError && <p className="mt-3 text-sm text-red-600">Unable to add a demo product. Complete onboarding and try again.</p>}
         </div>
       </DashboardShell>
     );
@@ -94,7 +109,7 @@ function List() {
       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-sm">
           <thead className="text-left text-xs uppercase tracking-wider text-slate-500">
-            <tr><th className="px-4 py-3">Product</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Price</th><th className="px-4 py-3">Updated</th><th></th></tr>
+            <tr><th className="px-4 py-3">Product</th><th className="px-4 py-3">SKU</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">AR</th><th className="px-4 py-3">Price</th><th className="px-4 py-3">Updated</th><th></th></tr>
           </thead>
           <tbody>
             {productsList.map((p: any) => (
@@ -102,13 +117,14 @@ function List() {
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 overflow-hidden rounded-lg bg-slate-100 flex items-center justify-center">
-                      <Package className="h-5 w-5 text-slate-300" />
+                      {p?.image_url ? <img src={p.image_url} alt="" className="h-full w-full object-cover" onError={(event) => { event.currentTarget.src = "/placeholder.png"; }} /> : <Package className="h-5 w-5 text-slate-300" />}
                     </div>
                     <Link to="/products/$id" params={{ id: p?.id ?? "" }} className="font-medium text-[#0F172A] hover:underline">
                       {p?.title || "Untitled"}
                     </Link>
                   </div>
                 </td>
+                <td className="px-4 py-3 font-mono text-xs text-slate-500">{p?.sku || "—"}</td>
                 <td className="px-4 py-3">
                   <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
                     p?.status === "active" ? "bg-emerald-100 text-emerald-700" :
@@ -116,6 +132,7 @@ function List() {
                     "bg-slate-100 text-slate-500"
                   }`}>{p?.status || "unknown"}</span>
                 </td>
+                <td className="px-4 py-3 text-xs text-slate-500">{p?.ar_ready ? "Ready" : "Not ready"}</td>
                 <td className="px-4 py-3 text-slate-500">
                   {typeof p?.price_cents === "number" ? `$${(p.price_cents / 100).toFixed(2)}` : "$0.00"}
                 </td>

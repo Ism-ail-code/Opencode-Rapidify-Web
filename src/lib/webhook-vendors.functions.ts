@@ -1,4 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
+import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { validateWebhookSignature } from "@/lib/security.functions";
@@ -140,9 +141,10 @@ const ShopifyWebhookSchema = z.object({
 });
 
 export const handleShopifyWebhook = createServerFn({ method: "POST" })
-  .handler(async ({ request }) => {
+  .handler(async () => {
+    const request = getRequest();
     const headers: Record<string, string> = {};
-    request.headers.forEach((v, k) => { headers[k] = v; });
+    for (const [key, value] of request.headers.entries()) { headers[key] = value; }
 
     const rawBody = await request.text();
     let parsed: unknown;
@@ -235,9 +237,10 @@ const AmazonWebhookSchema = z.object({
 });
 
 export const handleAmazonWebhook = createServerFn({ method: "POST" })
-  .handler(async ({ request }) => {
+  .handler(async () => {
+    const request = getRequest();
     const headers: Record<string, string> = {};
-    request.headers.forEach((v, k) => { headers[k] = v; });
+    for (const [key, value] of request.headers.entries()) { headers[key] = value; }
 
     const rawBody = await request.text();
     let parsed: unknown;
@@ -307,9 +310,10 @@ const DarazWebhookSchema = z.object({
 });
 
 export const handleDarazWebhook = createServerFn({ method: "POST" })
-  .handler(async ({ request }) => {
+  .handler(async () => {
+    const request = getRequest();
     const headers: Record<string, string> = {};
-    request.headers.forEach((v, k) => { headers[k] = v; });
+    for (const [key, value] of request.headers.entries()) { headers[key] = value; }
 
     const rawBody = await request.text();
     let parsed: unknown;

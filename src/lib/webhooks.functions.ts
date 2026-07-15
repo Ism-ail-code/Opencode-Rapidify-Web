@@ -40,6 +40,9 @@ async function handleCompletion(params: CompletionParams): Promise<{ ok: boolean
     return { ok: true, message: "No matching job — acknowledged" };
   }
 
+  if (!matched.merchant_id) throw new Error("No merchant_id associated with processing job");
+  if (!matched.product_id) throw new Error("No product_id associated with processing job");
+
   const now = new Date().toISOString();
 
   if (status === "SUCCEEDED") {
@@ -75,12 +78,26 @@ async function handleCompletion(params: CompletionParams): Promise<{ ok: boolean
     }
 
     // Update product
-    const upd: Record<string, unknown> = {};
+    const upd: { model_glb_url?: string | null; model_usdz_url?: string | null; thumbnail_url?: string | null } = {};
     if (finalGlb) upd.model_glb_url = finalGlb;
     if (finalUsdz) upd.model_usdz_url = finalUsdz;
     if (finalThumb) upd.thumbnail_url = finalThumb;
     if (Object.keys(upd).length) {
       await supabaseAdmin.from("products").update(upd).eq("id", matched.product_id);
+    }
+
+    // Upsert into models table
+    if (matched.business_id && (finalGlb || finalUsdz)) {
+      const { error: modelError } = await supabaseAdmin.from("models").upsert({
+        business_id: matched.business_id,
+        product_id: matched.product_id,
+        model_url: finalGlb || null,
+        usdz_url: finalUsdz || null,
+        status: "ready",
+      }, { onConflict: "business_id,product_id" });
+      if (modelError) {
+        console.error(`[Webhook] Failed to mark model ready for ${matched.product_id}:`, modelError.message);
+      }
     }
 
     // Mark job ready

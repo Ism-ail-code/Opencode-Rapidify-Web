@@ -100,7 +100,7 @@ export const deductCredits = createServerFn({ method: "POST" })
       _merchant_id: merchant.id,
       _amount: data.amount,
       _reason: data.reason,
-      _ref_id: data.ref_id ?? null,
+      _ref_id: data.ref_id,
     });
 
     if (!ok) throw new Error("Insufficient credits");
@@ -142,7 +142,7 @@ export const addCredits = createServerFn({ method: "POST" })
       _merchant_id: data.merchant_id,
       _amount: data.amount,
       _reason: data.reason,
-      _ref_id: data.ref_id ?? null,
+      _ref_id: data.ref_id,
     });
     return { ok: true };
   });

@@ -45,9 +45,20 @@ export function checkRateLimit(
   };
 }
 
-export const rateLimitMiddleware = createMiddleware().server(async ({ next, request }) => {
-  const ip = request.headers.get("x-forwarded-for") || "unknown";
-  const endpoint = new URL(request.url).pathname;
+export const rateLimitMiddleware = createMiddleware({ type: "function" }).server(async ({ next }) => {
+  // Access the underlying web request to extract IP and path.
+  // getRequest() is available only on the server inside a server function context.
+  let ip = "unknown";
+  let endpoint = "/";
+  try {
+    const { getRequest } = await import("@tanstack/react-start/server");
+    const req = getRequest();
+    ip = req.headers.get("x-forwarded-for") ?? "unknown";
+    endpoint = new URL(req.url).pathname;
+  } catch {
+    // Not in a server-fn context — skip rate limiting.
+    return await next();
+  }
 
   const publicEndpoints = ["/p/", "/embed/", "/api/track"];
   const isPublicEndpoint = publicEndpoints.some(e => endpoint.startsWith(e));
@@ -141,7 +152,7 @@ export async function validateWebhookSignature(
       ["verify"]
     );
 
-    return await subtle.verify("HMAC", key, hexToBytes(signature), messageData);
+    return await subtle.verify("HMAC", key, hexToBytes(signature) as unknown as BufferSource, messageData as unknown as BufferSource);
   } catch {
     return false;
   }
@@ -189,9 +200,6 @@ export const preventReplayAttack = createServerFn({ method: "POST" })
   });
 
 export const auditLog = createServerFn({ method: "POST" })
-  .middleware([async ({ next, context }) => {
-    return await next();
-  }])
   .inputValidator((d: unknown) => z.object({
     action: z.string().min(1).max(100),
     resource: z.string().min(1).max(100),
@@ -212,9 +220,6 @@ export const auditLog = createServerFn({ method: "POST" })
   });
 
 export const validateTenantAccess = createServerFn({ method: "POST" })
-  .middleware([async ({ next, context }) => {
-    return await next();
-  }])
   .inputValidator((d: unknown) => z.object({
     merchantId: z.string().uuid(),
     resourceType: z.enum(["products", "analytics", "jobs"]),

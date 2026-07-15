@@ -9,12 +9,15 @@ declare module "react" {
           "ios-src"?: string;
           ar?: boolean;
           "ar-modes"?: string;
+          "ar-placement"?: "floor" | "wall";
+          "ar-scale"?: "auto" | "fixed";
           "camera-controls"?: boolean;
           "auto-rotate"?: boolean;
           "shadow-intensity"?: string;
           exposure?: string;
           poster?: string;
           loading?: "eager" | "lazy";
+          "interaction-prompt"?: "auto" | "none";
           alt?: string;
         },
         HTMLElement
@@ -29,18 +32,23 @@ type Props = {
   poster?: string | null;
   alt?: string;
   onArLaunch?: () => void;
+  onArSessionEnd?: () => void;
 };
 
-export function ARViewer({ glb, usdz, poster, alt, onArLaunch }: Props) {
+export function ARViewer({ glb, usdz, poster, alt, onArLaunch, onArSessionEnd }: Props) {
   const ref = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     const el = ref.current;
-    if (!el || !onArLaunch) return;
-    const handler = () => onArLaunch();
+    if (!el || (!onArLaunch && !onArSessionEnd)) return;
+    const handler = (event: Event) => {
+      const status = (event as CustomEvent<{ status?: string }>).detail?.status;
+      if (status === "session-started") onArLaunch?.();
+      if (status === "not-presenting" || status === "failed") onArSessionEnd?.();
+    };
     el.addEventListener("ar-status", handler as EventListener);
     return () => el.removeEventListener("ar-status", handler as EventListener);
-  }, [onArLaunch]);
+  }, [onArLaunch, onArSessionEnd]);
 
   if (!glb) {
     return (
@@ -59,8 +67,11 @@ export function ARViewer({ glb, usdz, poster, alt, onArLaunch }: Props) {
       alt={alt ?? "3D model"}
       ar
       ar-modes="webxr scene-viewer quick-look"
+      ar-placement="floor"
+      ar-scale="auto"
       camera-controls
       auto-rotate
+      interaction-prompt="auto"
       shadow-intensity="1"
       exposure="1"
       loading="eager"

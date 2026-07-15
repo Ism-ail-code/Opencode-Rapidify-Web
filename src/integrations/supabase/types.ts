@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       analytics_events: {
         Row: {
+          business_id: string | null
           created_at: string
           event_type: string
           id: string
@@ -27,6 +28,7 @@ export type Database = {
           variant_id: string | null
         }
         Insert: {
+          business_id?: string | null
           created_at?: string
           event_type: string
           id?: string
@@ -38,6 +40,7 @@ export type Database = {
           variant_id?: string | null
         }
         Update: {
+          business_id?: string | null
           created_at?: string
           event_type?: string
           id?: string
@@ -64,6 +67,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      business_profiles: {
+        Row: {
+          business_email: string
+          business_name: string
+          country: string
+          created_at: string
+          id: string
+          is_verified: boolean
+          marketplace: string
+          onboarding_completed_at: string | null
+          representative_name: string
+          seller_id: string | null
+          store_url: string
+          updated_at: string
+        }
+        Insert: {
+          business_email?: string
+          business_name?: string
+          country?: string
+          created_at?: string
+          id: string
+          is_verified?: boolean
+          marketplace?: string
+          onboarding_completed_at?: string | null
+          representative_name?: string
+          seller_id?: string | null
+          store_url?: string
+          updated_at?: string
+        }
+        Update: {
+          business_email?: string
+          business_name?: string
+          country?: string
+          created_at?: string
+          id?: string
+          is_verified?: boolean
+          marketplace?: string
+          onboarding_completed_at?: string | null
+          representative_name?: string
+          seller_id?: string | null
+          store_url?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       merchants: {
         Row: {
@@ -103,6 +151,7 @@ export type Database = {
       }
       processing_jobs: {
         Row: {
+          business_id: string | null
           completed_at: string | null
           created_at: string
           error: string | null
@@ -121,6 +170,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          business_id?: string | null
           completed_at?: string | null
           created_at?: string
           error?: string | null
@@ -139,6 +189,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          business_id?: string | null
           completed_at?: string | null
           created_at?: string
           error?: string | null
@@ -219,11 +270,15 @@ export type Database = {
       }
       products: {
         Row: {
+          business_id: string | null
           buy_url: string | null
           created_at: string
           currency: string
           description: string | null
+          external_product_id: string | null
+          external_sku: string | null
           id: string
+          image_url: string | null
           merchant_id: string
           model_glb_url: string | null
           model_usdz_url: string | null
@@ -235,11 +290,15 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          business_id?: string | null
           buy_url?: string | null
           created_at?: string
           currency?: string
           description?: string | null
+          external_product_id?: string | null
+          external_sku?: string | null
           id?: string
+          image_url?: string | null
           merchant_id: string
           model_glb_url?: string | null
           model_usdz_url?: string | null
@@ -251,11 +310,15 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          business_id?: string | null
           buy_url?: string | null
           created_at?: string
           currency?: string
           description?: string | null
+          external_product_id?: string | null
+          external_sku?: string | null
           id?: string
+          image_url?: string | null
           merchant_id?: string
           model_glb_url?: string | null
           model_usdz_url?: string | null
@@ -275,6 +338,111 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      models: {
+        Row: {
+          business_id: string
+          created_at: string
+          id: string
+          model_url: string | null
+          product_id: string
+          status: string
+          updated_at: string
+          usdz_url: string | null
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          id?: string
+          model_url?: string | null
+          product_id: string
+          status?: string
+          updated_at?: string
+          usdz_url?: string | null
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          id?: string
+          model_url?: string | null
+          product_id?: string
+          status?: string
+          updated_at?: string
+          usdz_url?: string | null
+        }
+        Relationships: []
+      }
+      store_integrations: {
+        Row: {
+          business_id: string
+          created_at: string
+          external_store_id: string | null
+          id: string
+          last_sync_at: string | null
+          platform: string
+          status: string
+          store_url: string
+          updated_at: string
+        }
+        Insert: {
+          business_id: string
+          created_at?: string
+          external_store_id?: string | null
+          id?: string
+          last_sync_at?: string | null
+          platform: string
+          status?: string
+          store_url: string
+          updated_at?: string
+        }
+        Update: {
+          business_id?: string
+          created_at?: string
+          external_store_id?: string | null
+          id?: string
+          last_sync_at?: string | null
+          platform?: string
+          status?: string
+          store_url?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      webhook_logs: {
+        Row: {
+          business_id: string | null
+          created_at: string
+          error: string | null
+          id: string
+          payload: Json
+          platform: string
+          processed_at: string | null
+          signature_valid: boolean
+          topic: string
+        }
+        Insert: {
+          business_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          payload?: Json
+          platform?: string
+          processed_at?: string | null
+          signature_valid?: boolean
+          topic?: string
+        }
+        Update: {
+          business_id?: string | null
+          created_at?: string
+          error?: string | null
+          id?: string
+          payload?: Json
+          platform?: string
+          processed_at?: string | null
+          signature_valid?: boolean
+          topic?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
@@ -387,6 +555,7 @@ export type Database = {
       }
       marketplace_connections: {
         Row: {
+          business_id: string | null
           created_at: string
           id: string
           last_sync_at: string | null
@@ -400,6 +569,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          business_id?: string | null
           created_at?: string
           id?: string
           last_sync_at?: string | null
@@ -413,6 +583,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          business_id?: string | null
           created_at?: string
           id?: string
           last_sync_at?: string | null
@@ -637,7 +808,9 @@ export type Database = {
           expires_at: string
           id: string
           merchant_id: string | null
+          optimized_url: string | null
           size_bytes: number | null
+          source_hash: string | null
           source_url: string
         }
         Insert: {
@@ -648,7 +821,9 @@ export type Database = {
           expires_at: string
           id?: string
           merchant_id?: string | null
+          optimized_url?: string | null
           size_bytes?: number | null
+          source_hash?: string | null
           source_url: string
         }
         Update: {
@@ -659,7 +834,9 @@ export type Database = {
           expires_at?: string
           id?: string
           merchant_id?: string | null
+          optimized_url?: string | null
           size_bytes?: number | null
+          source_hash?: string | null
           source_url?: string
         }
         Relationships: []

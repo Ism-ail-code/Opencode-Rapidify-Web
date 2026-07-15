@@ -74,7 +74,8 @@ export const verifyFileUpload = createServerFn({ method: "POST" })
     }
     
     // Verify file integrity if ETag is provided
-    if (etag && fileData.etag !== etag) {
+    const storedEtag = (fileData.metadata as { eTag?: string } | null)?.eTag ?? null;
+    if (etag && storedEtag !== etag) {
       throw new Error("File integrity check failed");
     }
     
@@ -83,7 +84,7 @@ export const verifyFileUpload = createServerFn({ method: "POST" })
       size: fileData.metadata?.size || 0,
       contentType: fileData.metadata?.mimetype || "application/octet-stream",
       lastModified: fileData.updated_at,
-      etag: fileData.etag,
+      etag: storedEtag,
     };
   });
 
@@ -132,21 +133,39 @@ export const generateUploadUrl = createServerFn({ method: "POST" })
     bucket: z.enum(["thumbnails", "models"]),
     contentType: z.string(),
     size: z.number(),
-    expiresIn: z.number().optional(),
   }).parse(d))
   .handler(async ({ data, context }) => {
-    const { filename, bucket, contentType, size, expiresIn } = data;
+    const { filename, bucket, contentType, size } = data;
     
-    // Generate signed URL for direct upload
+    // Validate file type
+    const allowedTypes = bucket === "thumbnails" ? ACCEPTED_IMAGE_TYPES : ACCEPTED_MODEL_TYPES;
+    if (!allowedTypes.includes(contentType as any)) {
+      throw new Error(`Invalid file type. Allowed: ${allowedTypes.join(", ")}`);
+    }
+    
+    // Validate file size
+    const maxSize = bucket === "thumbnails" ? MAX_IMAGE_SIZE : MAX_MODEL_SIZE;
+    if (size > maxSize) {
+      const maxMB = Math.ceil(maxSize / (1024 * 1024));
+      throw new Error(`File too large. Maximum: ${maxMB}MB`);
+    }
+    
+    // Generate signed upload URL (via service role, bypasses RLS)
     const { data: signedUrlData, error } = await supabaseAdmin
       .storage
       .from(bucket)
-      .createSignedUrl(filename, expiresIn || 3600);
+      .createSignedUploadUrl(filename);
     
     if (error) throw error;
     
+    const SUPABASE_URL = process.env.SUPABASE_URL!;
+    const publicUrl = `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${filename}`;
+    
     return {
       signedUrl: signedUrlData.signedUrl,
+      path: signedUrlData.path,
+      token: signedUrlData.token,
+      publicUrl,
       filename,
       bucket,
       contentType,

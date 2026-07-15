@@ -85,18 +85,10 @@ const VENDOR_ADAPTERS: Record<string, typeof fetchDarazCatalog> = {
 export const listMarketplaceConnections = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    // Resolve merchant_id first
-    const { data: merchant } = await context.supabase
-      .from("merchants")
-      .select("id")
-      .eq("owner_id", context.userId)
-      .maybeSingle();
-    if (!merchant) return [];
-
     const { data, error } = await context.supabase
       .from("marketplace_connections")
       .select("*")
-      .eq("merchant_id", merchant.id)
+      .eq("business_id", context.userId)
       .order("created_at", { ascending: false });
     if (error) throw error;
     return data ?? [];
@@ -122,6 +114,7 @@ export const createMarketplaceConnection = createServerFn({ method: "POST" })
     const encryptedToken = await encryptToken(data.access_token);
 
     const { error } = await context.supabase.from("marketplace_connections").insert({
+      business_id: context.userId,
       merchant_id: merchant.id,
       platform: data.vendor,
       store_url: data.store_url,

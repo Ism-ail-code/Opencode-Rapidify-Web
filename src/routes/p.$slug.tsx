@@ -63,6 +63,7 @@ function ProductPage() {
   const poster = current?.thumbnail_url ?? product.thumbnail_url;
 
   useEffect(() => {
+    track("page_view", { product_id: product.id, merchant_id: product.merchant_id });
     track("product_view", { product_id: product.id, merchant_id: product.merchant_id });
   }, [product.id, product.merchant_id]);
 
@@ -75,6 +76,7 @@ function ProductPage() {
         <div className="rounded-2xl glass p-3">
           <ARViewer glb={glb} usdz={usdz} poster={poster} alt={product.title}
             onArLaunch={() => track("ar_launch", { product_id: product.id, merchant_id: product.merchant_id })}
+            onArSessionEnd={() => track("ar_session_end", { product_id: product.id, merchant_id: product.merchant_id })}
           />
         </div>
         <div className="flex flex-col">
@@ -104,7 +106,10 @@ function ProductPage() {
           )}
 
           <div className="mt-8 flex flex-wrap gap-3">
-            <a href={product.buy_url || "#"} onClick={() => track("buy_click", { product_id: product.id, merchant_id: product.merchant_id })}
+            <a href={product.buy_url || "#"} onClick={() => {
+              track("add_to_cart", { product_id: product.id, merchant_id: product.merchant_id });
+              track("buy_click", { product_id: product.id, merchant_id: product.merchant_id });
+            }}
               className="inline-flex items-center gap-2 rounded-lg btn-hero px-5 py-3 text-sm font-medium">
               <ShoppingBag className="h-4 w-4" /> Buy now
             </a>

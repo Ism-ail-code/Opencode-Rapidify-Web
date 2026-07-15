@@ -7,7 +7,19 @@ function sid() {
   return s;
 }
 
-type EventName = "product_view" | "ar_launch" | "buy_click" | "qr_open" | "embed_open" | "variant_switch" | "session_start";
+type EventName =
+  | "product_view"
+  | "page_view"
+  | "ar_widget_visible"
+  | "ar_launch"
+  | "ar_session_end"
+  | "add_to_cart"
+  | "purchase_completed"
+  | "buy_click"
+  | "qr_open"
+  | "embed_open"
+  | "variant_switch"
+  | "session_start";
 
 export function track(event: EventName, opts: {
   product_id?: string | null; merchant_id?: string | null; variant_id?: string | null;

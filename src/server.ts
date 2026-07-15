@@ -3,6 +3,8 @@ import "./lib/error-capture";
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
 import { logger, config, getObservabilityHeaders } from "./lib/infrastructure";
+import { handleShopifyWebhookRequest } from "./lib/shopify-webhook.server";
+import { handlePublicAssetMetaRequest } from "./lib/public-asset-meta.server";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -47,6 +49,13 @@ export default {
         url: request.url, 
         method: request.method 
       });
+      const pathname = new URL(request.url).pathname;
+      if (pathname === "/api/webhooks/shopify") {
+        return await handleShopifyWebhookRequest(request);
+      }
+      if (pathname === "/api/public/asset-meta") {
+        return await handlePublicAssetMetaRequest(request);
+      }
       const handler = await getServerEntry();
       const response = await handler.fetch(request, env, ctx);
       const enhancedHeaders = new Headers(response.headers);

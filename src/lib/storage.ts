@@ -181,7 +181,7 @@ export async function listFiles(
     name: f.name,
     size: f.metadata?.size ?? 0,
     mimeType: f.metadata?.mimetype ?? "application/octet-stream",
-    updatedAt: f.updated_at,
+    updatedAt: f.updated_at ?? "",
   }));
 }
 

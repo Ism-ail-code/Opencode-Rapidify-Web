@@ -1,415 +1,109 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery, queryOptions, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, queryOptions } from "@tanstack/react-query";
 import { DashboardShell } from "@/components/DashboardShell";
-import { listMyProducts } from "@/lib/products.functions";
-import { getMyAnalytics, getAttributionSummary } from "@/lib/analytics.functions";
-import type { AttributionSummary } from "@/lib/analytics.functions";
-import { getMyMerchant, getMyProfile } from "@/lib/merchant.functions";
-import { getProcessingJobs } from "@/lib/jobs.functions";
-import { Boxes, Eye, Sparkles, ShoppingBag, Hourglass, AlertTriangle, RefreshCw, Package, DollarSign, BarChart3, TrendingUp, Target, ShieldCheck, ShieldAlert, Globe, Link2 } from "lucide-react";
-import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
-import { Component, type ReactNode, type ErrorInfo } from "react";
+import { getDashboardSnapshot } from "@/lib/dashboard.functions";
+import { generateDemoWorkspace, resetDemoData, simulateShopifyWebhook } from "@/lib/developer-tools.functions";
+import { AlertTriangle, BarChart3, Boxes, CheckCircle2, CircleDashed, Eye, Package, RefreshCw, ShieldAlert, ShieldCheck, ShoppingCart, Sparkles, Wrench } from "lucide-react";
 
-const analyticsOpts = queryOptions({ queryKey: ["my-analytics"], queryFn: () => getMyAnalytics() });
-const productsOpts = queryOptions({ queryKey: ["my-products"], queryFn: () => listMyProducts() });
-const merchantOpts = queryOptions({ queryKey: ["my-merchant"], queryFn: () => getMyMerchant() });
-const processingJobsOpts = queryOptions({ queryKey: ["processing-jobs"], queryFn: () => getProcessingJobs() });
-const attributionOpts = queryOptions({ queryKey: ["attribution-summary"], queryFn: () => getAttributionSummary() });
-const profileOpts = queryOptions({ queryKey: ["my-profile"], queryFn: () => getMyProfile() });
+const dashboardOptions = queryOptions({ queryKey: ["dashboard-snapshot"], queryFn: () => getDashboardSnapshot() });
+const developerToolsVisible = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEVELOPER_TOOLS === "true";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   head: () => ({ meta: [{ title: "Dashboard — Rapidify" }, { name: "robots", content: "noindex" }] }),
   component: Dashboard,
 });
 
-function StatsCards({ products, analytics }: { products: any[]; analytics: any }) {
-  const stats = [
-    { label: "Active products", value: products.filter(p => p.status === "active").length, icon: Boxes },
-    { label: "Product views", value: analytics?.totals?.product_view ?? 0, icon: Eye },
-    { label: "AR launches", value: analytics?.totals?.ar_launch ?? 0, icon: Sparkles },
-    { label: "Buy clicks", value: analytics?.totals?.buy_click ?? 0, icon: ShoppingBag },
-  ];
+function Dashboard() {
+  const queryClient = useQueryClient();
+  const dashboard = useQuery(dashboardOptions);
+  const refresh = () => queryClient.invalidateQueries({ queryKey: ["dashboard-snapshot"] });
+  const demo = useMutation({ mutationFn: () => generateDemoWorkspace(), onSuccess: refresh });
+  const webhook = useMutation({ mutationFn: () => simulateShopifyWebhook(), onSuccess: refresh });
+  const reset = useMutation({ mutationFn: () => resetDemoData(), onSuccess: refresh });
 
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {stats.map(s => (
-        <div key={s.label} className="rounded-2xl glass p-5">
-          <div className="flex items-center justify-between text-muted-foreground">
-            <span className="text-xs uppercase tracking-wider">{s.label}</span>
-            <s.icon className="h-4 w-4" />
-          </div>
-          <div className="mt-2 text-3xl font-semibold tracking-tight">{s.value}</div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function AttributionCards({ attribution }: { attribution: AttributionSummary | null }) {
-  const safe = attribution ?? {
-    totalViews: 0, arLaunches: 0, arEngagementRate: "0.0",
-    addToCartAfterAr: 0, conversionRateAfterAr: "0.0",
-    estimatedRevenueInfluenced: 0, avgArSessionDuration: "0s",
-    totalSessions: 0, arSessions: 0, purchaseSessions: 0,
-  };
-
-  const cards = [
-    { label: "AR engagement rate", value: `${safe.arEngagementRate}%`, sub: `${safe.arLaunches} AR launches`, icon: Target },
-    { label: "Add-to-cart after AR", value: safe.addToCartAfterAr, sub: `${safe.addToCartAfterAr} sessions`, icon: ShoppingBag },
-    { label: "Conversion after AR", value: `${safe.conversionRateAfterAr}%`, sub: `${safe.purchaseSessions} purchases`, icon: TrendingUp },
-    { label: "Revenue influenced", value: `$${(safe.estimatedRevenueInfluenced / 100).toLocaleString()}`, sub: `Avg AR session ${safe.avgArSessionDuration}`, icon: DollarSign },
-  ];
-
-  return (
-    <div className="rounded-2xl glass p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <BarChart3 className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-sm font-medium">AR Revenue Attribution — last 30 days</h3>
-        <Link to="/analytics" className="ml-auto text-xs text-muted-foreground hover:text-foreground">Full analytics →</Link>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {cards.map(c => (
-          <div key={c.label} className="rounded-xl bg-muted/30 p-4">
-            <div className="flex items-center justify-between text-muted-foreground">
-              <span className="text-[10px] uppercase tracking-wider">{c.label}</span>
-              <c.icon className="h-3.5 w-3.5" />
-            </div>
-            <div className="mt-1 text-2xl font-semibold tracking-tight">{c.value}</div>
-            <div className="mt-0.5 text-[11px] text-muted-foreground">{c.sub}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function VerificationCard({ profile, merchant }: { profile: any; merchant: any }) {
-  const isVerified = profile?.is_verified ?? false;
-  const storeUrl = merchant?.store_domain ?? "";
-  const marketplace = merchant?.marketplace ?? "other";
-  const businessName = profile?.business_name ?? "";
-
-  return (
-    <div className="rounded-2xl glass p-5">
-      <div className="mb-3 flex items-center gap-2">
-        {isVerified ? (
-          <ShieldCheck className="h-4 w-4 text-emerald-400" />
-        ) : (
-          <ShieldAlert className="h-4 w-4 text-amber-400" />
-        )}
-        <h3 className="text-sm font-medium">Business Verification</h3>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-xl bg-muted/30 p-3">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            {isVerified ? (
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-            ) : (
-              <ShieldAlert className="h-3.5 w-3.5 text-amber-400" />
-            )}
-            <span className="text-[10px] uppercase tracking-wider">Status</span>
-          </div>
-          <div className={`mt-1 text-sm font-semibold ${isVerified ? "text-emerald-400" : "text-amber-400"}`}>
-            {isVerified ? "Verified" : "Unverified"}
-          </div>
-          <div className="mt-0.5 text-[11px] text-muted-foreground">
-            {businessName || "Business"}
-          </div>
-        </div>
-        <div className="rounded-xl bg-muted/30 p-3">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Globe className="h-3.5 w-3.5" />
-            <span className="text-[10px] uppercase tracking-wider">Store URL</span>
-          </div>
-          <div className="mt-1 text-sm font-semibold truncate">
-            {storeUrl ? (
-              <span className="text-emerald-400">Valid</span>
-            ) : (
-              <span className="text-muted-foreground">Not set</span>
-            )}
-          </div>
-          {storeUrl && (
-            <div className="mt-0.5 truncate text-[11px] text-muted-foreground" title={storeUrl}>
-              {storeUrl.replace(/^https?:\/\//, "")}
-            </div>
-          )}
-        </div>
-        <div className="rounded-xl bg-muted/30 p-3">
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Link2 className="h-3.5 w-3.5" />
-            <span className="text-[10px] uppercase tracking-wider">Webhook</span>
-          </div>
-          <div className="mt-1 text-sm font-semibold">
-            {isVerified ? (
-              <span className="text-emerald-400">Connected</span>
-            ) : (
-              <span className="text-muted-foreground">Pending</span>
-            )}
-          </div>
-          <div className="mt-0.5 text-[11px] text-muted-foreground capitalize">{marketplace}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function EngagementChart({ analytics }: { analytics: any }) {
-  const days = analytics?.days ?? [];
-  return (
-    <div className="rounded-2xl glass p-5 lg:col-span-2">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-medium">Engagement — last 14 days</h3>
-        <Link to="/analytics" className="text-xs text-muted-foreground hover:text-foreground">Full analytics →</Link>
-      </div>
-      <div className="h-64">
-        {days.length > 0 ? (
-          <ResponsiveContainer>
-            <LineChart data={days}>
-              <XAxis dataKey="day" stroke="currentColor" opacity={0.4} fontSize={11} />
-              <YAxis stroke="currentColor" opacity={0.4} fontSize={11} />
-              <Tooltip contentStyle={{ background: "rgba(20,15,35,0.95)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }} />
-              <Line type="monotone" dataKey="views" stroke="#a78bfa" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="ar" stroke="#67e8f9" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="buys" stroke="#f0abfc" strokeWidth={2} dot={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        ) : (
-          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No data yet</div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ProcessingQueue({ processingJobs, qc }: { processingJobs: any[]; qc: any }) {
-  const getJobStatusColor = (status: string) => {
-    switch (status) {
-      case "ready": return "bg-emerald-500/20 text-emerald-300";
-      case "failed": return "bg-red-500/20 text-red-300";
-      case "processing": return "bg-blue-500/20 text-blue-300";
-      case "optimizing": return "bg-purple-500/20 text-purple-300";
-      default: return "bg-amber-500/20 text-amber-300";
-    }
-  };
-
-  return (
-    <div className="rounded-2xl glass p-5">
-      <div className="mb-3 flex items-center gap-2">
-        <Hourglass className="h-4 w-4 text-muted-foreground" />
-        <h3 className="text-sm font-medium">Processing queue</h3>
-        <button
-          onClick={() => qc.invalidateQueries({ queryKey: ["processing-jobs"] })}
-          className="ml-auto text-xs text-muted-foreground hover:text-foreground"
-        >
-          Refresh
-        </button>
-      </div>
-      <ul className="space-y-2 text-sm">
-        {processingJobs.length === 0 && <li className="text-muted-foreground">No jobs in queue.</li>}
-        {processingJobs.slice(0, 6).map(j => (
-          <li key={j.id} className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2">
-            <div className="flex items-center gap-2">
-              <span className="truncate text-xs text-muted-foreground">{j.provider}</span>
-              {j.status === "failed" && (j.retries ?? 0) >= (j.max_retries ?? 5) && (
-                <AlertTriangle className="h-3 w-3 text-red-400" />
-              )}
-            </div>
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getJobStatusColor(j.status)}`}>{j.status}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function RecentProducts({ products }: { products: any[] }) {
-  return (
-    <div className="rounded-2xl glass p-5">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-medium">Recent products</h3>
-        <Link to="/products" className="text-xs text-muted-foreground hover:text-foreground">Manage all →</Link>
-      </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {products.slice(0, 4).map(p => (
-          <Link key={p.id} to="/products/$id" params={{ id: p.id }} className="overflow-hidden rounded-xl glass transition hover:translate-y-[-2px]">
-            <div className="aspect-square bg-muted flex items-center justify-center">
-              <Package className="h-6 w-6 text-muted-foreground" />
-            </div>
-            <div className="p-3">
-              <div className="truncate text-sm font-medium">{p.title}</div>
-              <div className="text-xs text-muted-foreground">{p.status}</div>
-            </div>
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function DashboardContent({ merchant }: { merchant: any }) {
-  const { data: analytics, isLoading: analyticsLoading, isError: analyticsError } = useQuery(analyticsOpts);
-  const { data: products, isLoading: productsLoading, isError: productsError } = useQuery(productsOpts);
-  const { data: processingJobs, isLoading: jobsLoading, isError: jobsError } = useQuery(processingJobsOpts);
-  const { data: attribution, isLoading: attributionLoading } = useQuery(attributionOpts);
-  const { data: profile, isLoading: profileLoading } = useQuery(profileOpts);
-  const qc = useQueryClient();
-
-  if (analyticsLoading || productsLoading || jobsLoading || attributionLoading || profileLoading) {
-    return <div className="p-8 text-sm text-muted-foreground">Loading dashboard metrics...</div>;
+  if (dashboard.isLoading) {
+    return <DashboardShell title="Merchant dashboard"><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{[0, 1, 2, 3].map((item) => <div key={item} className="h-28 animate-pulse rounded-2xl glass" />)}</div></DashboardShell>;
   }
 
-  if (analyticsError || productsError || jobsError) {
+  if (dashboard.isError || !dashboard.data) {
     return (
-      <div className="rounded-2xl glass p-8 text-center">
-        <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-amber-400" />
-        <p className="text-sm font-medium">Syncing your workspace data...</p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          If this takes longer than a few moments, please refresh your browser or contact workspace support.
-        </p>
-      </div>
+      <DashboardShell title="Merchant dashboard">
+        <div className="rounded-2xl glass p-8 text-center">
+          <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-amber-400" />
+          <h2 className="text-lg font-semibold">Dashboard data is temporarily unavailable</h2>
+          <p className="mt-2 text-sm text-muted-foreground">Your data is safe. Try refreshing the dashboard.</p>
+          <button type="button" onClick={() => dashboard.refetch()} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background"><RefreshCw className="h-4 w-4" /> Try again</button>
+        </div>
+      </DashboardShell>
     );
   }
 
-  const safeProducts = Array.isArray(products) ? products : [];
-  const safeJobs = Array.isArray(processingJobs) ? processingJobs : [];
-  const safeAnalytics = analytics ?? { totals: {}, days: [], recent: [] };
-  const safeAttribution = attribution ?? null;
-  const safeProfile = profile ?? null;
-
-  const hasProducts = safeProducts.length > 0;
+  const data = dashboard.data;
+  const completed = Boolean(data.profile?.onboarding_completed_at);
+  const currency = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  const cards = [
+    { label: "Total Views", value: data.metrics.totalViews.toLocaleString(), icon: Eye },
+    { label: "AR Launches", value: data.metrics.arLaunches.toLocaleString(), icon: Sparkles },
+    { label: "Add to Cart", value: data.metrics.addToCartAfterAr.toLocaleString(), icon: ShoppingCart },
+    { label: "Revenue Influenced", value: currency.format(data.metrics.revenueInfluenced / 100), icon: BarChart3 },
+  ];
 
   return (
-    <>
-      <StatsCards products={safeProducts} analytics={safeAnalytics} />
-      <div className="mt-6">
-        <VerificationCard profile={safeProfile} merchant={merchant} />
-      </div>
-      <div className="mt-6">
-        <AttributionCards attribution={safeAttribution} />
-      </div>
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <EngagementChart analytics={safeAnalytics} />
-        <ProcessingQueue processingJobs={safeJobs} qc={qc} />
-      </div>
-      {hasProducts ? (
-        <div className="mt-6">
-          <RecentProducts products={safeProducts} />
-        </div>
-      ) : (
-        <div className="mt-6 rounded-2xl glass p-8 text-center">
-          <ShoppingBag className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
-          <p className="text-sm font-medium">No products yet</p>
-          <p className="mt-1 text-xs text-muted-foreground">Add your first product to see it here.</p>
+    <DashboardShell title={data.merchant?.name ? `Welcome, ${data.merchant.name}` : "Merchant dashboard"}>
+      {!completed && (
+        <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div><p className="font-medium">Complete your merchant profile</p><p className="mt-1 text-sm text-muted-foreground">Finish onboarding to keep store and marketplace details current.</p></div>
+          <Link to="/auth/onboarding" search={{ verify: undefined }} className="shrink-0 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background">Complete Merchant Profile</Link>
         </div>
       )}
-    </>
-  );
-}
 
-function DashboardFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
-  return (
-    <div className="rounded-2xl glass p-8 text-center">
-      <AlertTriangle className="mx-auto mb-3 h-8 w-8 text-amber-400" />
-      <p className="text-sm font-medium text-foreground">Syncing your workspace data...</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        If this takes longer than a few moments, please refresh your browser or contact workspace support.
-      </p>
-      <button onClick={resetErrorBoundary} className="mt-4 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90">
-        Try again
-      </button>
-    </div>
-  );
-}
+      {data.warnings.length > 0 && <div className="mb-6 rounded-xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-amber-100">{data.warnings.join(" ")}</div>}
 
-interface DashboardErrorBoundaryProps {
-  children: ReactNode;
-  fallback: (error: Error, reset: () => void) => ReactNode;
-}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {cards.map(({ label, value, icon: Icon }) => <div key={label} className="rounded-2xl glass p-5"><div className="flex items-center justify-between text-muted-foreground"><span className="text-xs uppercase tracking-wider">{label}</span><Icon className="h-4 w-4" /></div><div className="mt-2 text-3xl font-semibold tracking-tight">{value}</div></div>)}
+      </div>
 
-interface DashboardErrorBoundaryState {
-  error: Error | null;
-}
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+        <section className="rounded-2xl glass p-5">
+          <div className="flex items-center gap-2"><span className={`grid h-7 w-7 place-items-center rounded-full ${data.profile?.is_verified ? "bg-emerald-500/15 text-emerald-400" : "bg-amber-500/15 text-amber-400"}`}>{data.profile?.is_verified ? <ShieldCheck className="h-4 w-4" /> : <ShieldAlert className="h-4 w-4" />}</span><h2 className="text-sm font-medium">Business verification</h2></div>
+          <p className="mt-3 text-sm">{data.profile?.is_verified ? "Verified" : "Verification pending"}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{data.profile?.business_name || "Business details not completed"}</p>
+        </section>
+        <section className="rounded-2xl glass p-5">
+          <div className="flex items-center gap-2"><CircleDashed className="h-4 w-4 text-muted-foreground" /><h2 className="text-sm font-medium">Sync status</h2></div>
+          <p className="mt-3 text-sm capitalize">{data.sync.status.replace(/-/g, " ")}</p>
+          <p className="mt-1 text-xs text-muted-foreground">{data.sync.queued} active job{data.sync.queued === 1 ? "" : "s"}{data.sync.failed ? ` · ${data.sync.failed} needs attention` : ""}</p>
+        </section>
+      </div>
 
-class DashboardErrorBoundary extends Component<DashboardErrorBoundaryProps, DashboardErrorBoundaryState> {
-  state: DashboardErrorBoundaryState = { error: null };
+      <div className="mt-6 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+        <section className="rounded-2xl glass p-5">
+          <div className="flex items-center justify-between"><h2 className="text-sm font-medium">Recent activity</h2><Link to="/analytics" className="text-xs text-muted-foreground hover:text-foreground">View analytics →</Link></div>
+          <ul className="mt-3 divide-y divide-border/50 text-sm">
+            {data.activity.map((event, index) => <li key={`${event.created_at}-${index}`} className="flex items-center justify-between py-3"><span className="capitalize">{event.type.replace(/_/g, " ")}</span><time className="text-xs text-muted-foreground">{new Date(event.created_at).toLocaleString()}</time></li>)}
+            {data.activity.length === 0 && <li className="py-6 text-center text-sm text-muted-foreground">No activity yet. Add a product or use the developer utility to generate test data.</li>}
+          </ul>
+        </section>
+        <section className="rounded-2xl glass p-5">
+          <h2 className="text-sm font-medium">Empty-state checklist</h2>
+          <ul className="mt-4 space-y-3 text-sm text-muted-foreground">
+            <li className="flex gap-2">{completed ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <CircleDashed className="h-4 w-4" />} Complete merchant profile</li>
+            <li className="flex gap-2">{data.products.length ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <CircleDashed className="h-4 w-4" />} Add or sync products</li>
+            <li className="flex gap-2">{data.products.some((product) => product.ar_ready) ? <CheckCircle2 className="h-4 w-4 text-emerald-400" /> : <CircleDashed className="h-4 w-4" />} Upload an AR-ready model</li>
+          </ul>
+        </section>
+      </div>
 
-  static getDerivedStateFromError(error: Error): DashboardErrorBoundaryState {
-    return { error };
-  }
+      <section className="mt-6 rounded-2xl glass p-5">
+        <div className="flex items-center justify-between"><h2 className="text-sm font-medium">Products</h2><Link to="/products" className="text-xs text-muted-foreground hover:text-foreground">Manage products →</Link></div>
+        {data.products.length === 0 ? <div className="py-8 text-center"><Package className="mx-auto h-7 w-7 text-muted-foreground" /><p className="mt-3 text-sm">No products yet</p><Link to="/products/new" className="mt-4 inline-block text-sm text-violet-300 hover:underline">Add your first product</Link></div> : <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{data.products.slice(0, 4).map((product) => <Link key={product.id} to="/products/$id" params={{ id: product.id }} className="overflow-hidden rounded-xl bg-muted/30 transition hover:bg-muted/50"><img src={product.image_url} alt="" className="h-28 w-full object-cover" onError={(event) => { event.currentTarget.src = "/placeholder.png"; }} /><div className="p-3"><p className="truncate text-sm font-medium">{product.title}</p><p className="mt-1 text-xs text-muted-foreground">{product.sku} · {product.ar_ready ? "AR ready" : "Model pending"}</p></div></Link>)}</div>}
+      </section>
 
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("[Dashboard]", error, info.componentStack);
-  }
+      <section className="mt-6 rounded-2xl glass p-5">
+        <div className="grid gap-4 sm:grid-cols-2"><div><p className="text-xs uppercase tracking-wider text-muted-foreground">Engagement rate</p><p className="mt-1 text-2xl font-semibold">{data.metrics.engagementRate.toFixed(1)}%</p></div><div><p className="text-xs uppercase tracking-wider text-muted-foreground">Conversion after AR</p><p className="mt-1 text-2xl font-semibold">{data.metrics.conversionAfterAr.toFixed(1)}%</p></div></div>
+      </section>
 
-  reset = () => this.setState({ error: null });
-
-  render() {
-    if (this.state.error) {
-      return this.props.fallback(this.state.error, this.reset);
-    }
-    return this.props.children;
-  }
-}
-
-function Dashboard() {
-  const { data: merchant, isLoading: merchantLoading } = useQuery(merchantOpts);
-  const qc = useQueryClient();
-
-  if (merchantLoading) {
-    return (
-      <DashboardShell title="Welcome">
-        <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[...Array(4)].map((_, i) => <div key={i} className="h-28 animate-pulse rounded-2xl glass" />)}
-          </div>
-          <div className="h-72 animate-pulse rounded-2xl glass" />
-        </div>
-      </DashboardShell>
-    );
-  }
-
-  if (!merchant) {
-    return (
-      <DashboardShell title="Welcome">
-        <div className="rounded-2xl glass p-8 text-center">
-          <Sparkles className="mx-auto mb-3 h-8 w-8 text-violet-400" />
-          <h2 className="text-lg font-semibold">Welcome to Rapidify!</h2>
-          <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
-            Complete your merchant profile to start using Rapidify.
-          </p>
-          <Link
-            to="/auth/onboarding"
-            search={{ verify: undefined }}
-            className="mt-6 inline-flex items-center gap-2 rounded-lg bg-foreground px-6 py-2.5 text-sm font-medium text-background hover:opacity-90 transition"
-          >
-            Complete your merchant profile
-          </Link>
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[
-              { label: "Product views", value: "0", icon: Eye },
-              { label: "AR launches", value: "0", icon: Sparkles },
-              { label: "Buy clicks", value: "0", icon: ShoppingBag },
-              { label: "Active products", value: "0", icon: Boxes },
-            ].map(s => (
-              <div key={s.label} className="rounded-2xl glass p-5">
-                <div className="flex items-center justify-between text-muted-foreground">
-                  <span className="text-xs uppercase tracking-wider">{s.label}</span>
-                  <s.icon className="h-4 w-4" />
-                </div>
-                <div className="mt-2 text-3xl font-semibold tracking-tight">{s.value}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </DashboardShell>
-    );
-  }
-
-  return (
-    <DashboardShell title={`Welcome, ${merchant.name}`}>
-      <DashboardErrorBoundary fallback={(error, reset) => <DashboardFallback error={error} resetErrorBoundary={reset} />}>
-        <DashboardContent merchant={merchant} />
-      </DashboardErrorBoundary>
+      {developerToolsVisible && <section className="mt-6 rounded-2xl border border-dashed border-border p-5"><div className="flex items-center gap-2"><Wrench className="h-4 w-4" /><h2 className="text-sm font-medium">Developer utilities</h2></div><p className="mt-1 text-xs text-muted-foreground">Enabled only in development or when VITE_ENABLE_DEVELOPER_TOOLS is set.</p><div className="mt-4 flex flex-wrap gap-2"><button type="button" disabled={demo.isPending} onClick={() => demo.mutate()} className="rounded-lg bg-foreground px-3 py-2 text-sm text-background disabled:opacity-50">Generate 5–10 demo products</button><button type="button" disabled={webhook.isPending} onClick={() => webhook.mutate()} className="rounded-lg border border-border px-3 py-2 text-sm disabled:opacity-50">Simulate Shopify webhook</button><button type="button" disabled={reset.isPending} onClick={() => reset.mutate()} className="rounded-lg border border-red-400/50 px-3 py-2 text-sm text-red-300 disabled:opacity-50">Reset my demo data</button></div>{(demo.isError || webhook.isError || reset.isError) && <p className="mt-3 text-sm text-red-300">{(demo.error ?? webhook.error ?? reset.error)?.message ?? "A developer utility failed. Verify database migrations and ENABLE_DEVELOPER_TOOLS."}</p>}</section>}
     </DashboardShell>
   );
 }

@@ -38,9 +38,10 @@ export const createProcessingJob = createServerFn({ method: "POST" })
       .insert({
         product_id: data.product_id,
         merchant_id: merchant.id,
+        business_id: context.userId,
         provider: data.provider,
         status: "queued",
-        input: data.input,
+        input: data.input as never,
         retries: 0,
         max_retries: 5,
         next_retry_at: new Date(Date.now() + 1000).toISOString(),
@@ -55,19 +56,10 @@ export const createProcessingJob = createServerFn({ method: "POST" })
 export const getProcessingJobs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async ({ context }) => {
-    // Look up the merchant's actual UUID
-    const { data: merchant } = await context.supabase
-      .from("merchants")
-      .select("id")
-      .eq("owner_id", context.userId)
-      .maybeSingle();
-
-    if (!merchant) return [];
-
     const { data, error } = await context.supabase
       .from("processing_jobs")
       .select("*")
-      .eq("merchant_id", merchant.id)
+      .eq("business_id", context.userId)
       .order("created_at", { ascending: false })
       .limit(50);
     
