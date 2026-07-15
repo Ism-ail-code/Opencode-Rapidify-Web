@@ -2,6 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { transferRemoteFile, productAssetPath } from "@/lib/storage";
 import { z } from "zod";
+import { sendModelReadyEmail } from "@/lib/email.functions";
 
 // ---------------------------------------------------------------------------
 // Shared completion logic (used by both Meshy and Tripo webhooks)
@@ -112,6 +113,39 @@ async function handleCompletion(params: CompletionParams): Promise<{ ok: boolean
       .eq("id", matched.id);
 
     console.log(`[Webhook] Job ${matched.id} completed via ${provider}`);
+
+    // Send model-ready notification to the product owner
+    try {
+      const { data: product } = await supabaseAdmin
+        .from("products")
+        .select("title, merchant_id")
+        .eq("id", matched.product_id)
+        .single();
+
+      if (product?.merchant_id) {
+        const { data: ownerProfile } = await supabaseAdmin
+          .from("business_profiles")
+          .select("business_email, representative_name")
+          .eq("id", matched.business_id ?? matched.merchant_id)
+          .maybeSingle();
+
+        if (ownerProfile?.business_email) {
+          sendModelReadyEmail({
+            data: {
+              email: ownerProfile.business_email,
+              name: ownerProfile.representative_name ?? "Merchant",
+              productName: product.title,
+              productId: matched.product_id,
+            },
+          }).catch((err) => {
+            console.error("[Webhook] Failed to send model-ready email", err);
+          });
+        }
+      }
+    } catch (emailErr) {
+      console.error("[Webhook] Failed to resolve owner for email notification", emailErr);
+    }
+
     return { ok: true, message: `Job ${matched.id} completed` };
   }
 

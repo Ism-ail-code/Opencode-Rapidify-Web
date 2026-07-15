@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { sendOnboardingCompleteEmail } from "@/lib/email.functions";
 
 export const OnboardingSchema = z.object({
   fullName: z.string().trim().min(1, "Representative name is required").max(120),
@@ -328,5 +329,16 @@ export const completeOnboarding = createServerFn({ method: "POST" })
     }
 
     console.info("[completeOnboarding] complete", { userId, merchantId: merchant.id });
+
+    sendOnboardingCompleteEmail({
+      data: {
+        email: data.businessEmail,
+        name: data.fullName,
+        businessName: data.businessName,
+      },
+    }).catch((err) => {
+      console.error("[completeOnboarding] failed to send welcome email", err);
+    });
+
     return { success: true, merchantId: merchant.id, profile };
   });

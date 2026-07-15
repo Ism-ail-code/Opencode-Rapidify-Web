@@ -1,9 +1,11 @@
 import { createFileRoute, useNavigate, Link, Outlet, useLocation } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Sparkles, CheckCircle, ArrowLeft, Mail, Info } from "lucide-react";
 import { ensureBusinessProfile } from "@/lib/merchant.functions";
+import { sendWelcomeEmail, sendPasswordResetEmail } from "@/lib/email.functions";
 import { getPostAuthDestination } from "@/lib/auth-routing";
 
 export const Route = createFileRoute("/auth")({
@@ -35,6 +37,8 @@ function AuthPage() {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [unregisteredNotice, setUnregisteredNotice] = useState(false);
+  const sendWelcome = useServerFn(sendWelcomeEmail);
+  const sendReset = useServerFn(sendPasswordResetEmail);
 
   const isExactAuth = location.pathname === "/auth";
 
@@ -91,10 +95,7 @@ function AuthPage() {
     e.preventDefault();
     setResetLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
-        redirectTo: `${window.location.origin}/auth/update-password`,
-      });
-      if (error) throw error;
+      await sendReset({ data: { email: resetEmail } });
       setResetSent(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to send reset email");
@@ -125,6 +126,7 @@ function AuthPage() {
           setUnregisteredNotice(false);
           resetForm();
           toast.success("Check your email for the verification link!");
+          sendWelcome({ data: { email, name: email.split("@")[0] } });
         } else if (data.session?.user) {
           // The auth.users trigger creates this row for every signup. This
           // explicit, authenticated upsert is a second guard and makes any RLS
@@ -139,6 +141,7 @@ function AuthPage() {
 
           setUnregisteredNotice(false);
           toast.success("Account created! Tell us about your business to continue.");
+          sendWelcome({ data: { email, name: email.split("@")[0] } });
           navigate({ to: "/auth/onboarding", search: { verify: undefined }, replace: true });
         }
       } else {
