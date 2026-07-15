@@ -18,6 +18,8 @@ A full-stack multi-tenant SaaS platform for merchants to create AR product pages
 | **Forms** | react-hook-form + Zod validation |
 | **Runner** | Standalone Node.js worker (`tsx`) |
 | **Build** | Vite 7 + Nitro (Cloudflare-compatible) |
+| **Testing** | Vitest + @testing-library/react + jsdom |
+| **Email** | Resend API (transactional) |
 | **Package** | Bun + npm lockfile |
 
 ---
@@ -94,6 +96,25 @@ A full-stack multi-tenant SaaS platform for merchants to create AR product pages
 - 14-day trend charts, conversion funnel, per-product analytics
 - Real-time activity (last 15 minutes)
 - Server-side event ingestion with validation
+
+### Testing (69 tests across 6 files)
+- **Vitest** with jsdom environment and @/ path alias
+- Unit tests: `utils.ts` (slugify, cn), `error-capture.ts` (withRetry, AppError, isRetryableError), `security.functions.ts` (sanitizeHtml, checkRateLimit, hexToBytes)
+- Embed logic tests: `embed.functions.ts` (global vs per-product script output)
+- Component tests: `EmbedSnippet` (global/per-product rendering, copy behavior), `ARViewer` (model-viewer attributes, AR event callbacks, fallback)
+- Test scripts: `npm test` (run once), `npm run test:watch` (watch mode)
+
+### Branded Email System (Resend)
+- Centralized email service (`src/services/emailService.ts`) with error handling and structured logging
+- 5 reusable HTML templates with inline styles (no external CSS dependencies):
+  - **Welcome Email** — sent after signup (email + Google OAuth)
+  - **Email Verification** — link generation for future custom SMTP use
+  - **Password Reset** — uses Supabase Admin API `generateLink` to bypass Supabase-branded emails
+  - **Onboarding Completed** — sent after merchant business profile + workspace setup
+  - **AR Model Ready** — sent to product owner when Meshy/Tripo job finishes
+- Server functions (`src/lib/email.functions.ts`) callable from client and server contexts
+- Wired into: auth signup, forgot password, merchant onboarding, and AI webhook completion
+- Configurable via `RESEND_API_KEY` and `EMAIL_FROM` env vars
 
 ### Security Hardening
 - Rate limiting (30/min public, 200/min auth) via TanStack middleware
@@ -174,6 +195,8 @@ A full-stack multi-tenant SaaS platform for merchants to create AR product pages
 | `worker:dev` | `npx tsx watch src/workers/runner.ts` | Dev mode worker |
 | `worker:cron` | `npx tsx src/workers/runner.ts --cron` | Cron mode worker |
 | `setup` | `npx tsx src/lib/setup.ts` | One-time infra setup |
+| `test` | `vitest run` | Run all tests |
+| `test:watch` | `vitest` | Watch mode (dev) |
 
 ---
 
@@ -185,8 +208,10 @@ A full-stack multi-tenant SaaS platform for merchants to create AR product pages
 │   ├── components/                # React components
 │   │   ├── ui/                    # shadcn/ui primitives (~40 files)
 │   │   ├── ARViewer.tsx           # <model-viewer> wrapper
+│   │   ├── ARViewer.test.tsx      # AR viewer component tests
 │   │   ├── DashboardShell.tsx     # Authenticated layout sidebar
 │   │   ├── EmbedSnippet.tsx       # Embed code copy widget
+│   │   ├── EmbedSnippet.test.tsx  # Embed snippet component tests
 │   │   ├── ProductForm.tsx        # Product creation/edit form
 │   │   ├── QRModal.tsx            # QR code modal
 │   │   ├── RouteErrorBoundary.tsx # Route-level error boundary
@@ -201,6 +226,7 @@ A full-stack multi-tenant SaaS platform for merchants to create AR product pages
 │   │   ├── cache.functions.ts     # In-memory TTL cache
 │   │   ├── credits.functions.ts   # Credit wallet operations
 │   │   ├── embed.functions.ts     # Embed script generation
+│   │   ├── email.functions.ts     # Server-side email sending (Resend)
 │   │   ├── error-capture.ts       # Retry logic & error helpers
 │   │   ├── error-page.ts          # SSR error page renderer
 │   │   ├── jobs.functions.ts      # Processing job lifecycle
@@ -208,8 +234,15 @@ A full-stack multi-tenant SaaS platform for merchants to create AR product pages
 │   │   ├── merchant.functions.ts  # Merchant onboarding
 │   │   ├── products.functions.ts  # Product CRUD
 │   │   ├── security.functions.ts  # Rate limiting, validation, audit
+│   │   ├── security.functions.test.ts
 │   │   ├── upload.functions.ts    # File upload signed URLs
-│   │   └── webhooks.functions.ts  # Meshy + Tripo webhooks
+│   │   ├── utils.test.ts          # Utility function tests
+│   │   ├── webhooks.functions.ts  # Meshy + Tripo webhooks
+│   │   └── webhook-vendors.functions.ts # Shopify / Amazon / Daraz webhooks
+│   ├── services/
+│   │   ├── emailService.ts        # Resend client wrapper
+│   │   └── email/
+│   │       └── templates.ts       # 5 HTML email templates
 │   ├── routes/                    # TanStack file-based routes
 │   └── workers/
 │       ├── runner.ts              # Worker main loop
@@ -234,3 +267,5 @@ A full-stack multi-tenant SaaS platform for merchants to create AR product pages
 | `APP_URL` | Yes | Deployment URL for webhooks |
 | `MESHY_API_KEY` | No | Meshy AI API key |
 | `TRIPO_API_KEY` | No | Tripo3D API key |
+| `RESEND_API_KEY` | Yes | Resend API key for branded transactional emails |
+| `EMAIL_FROM` | No | Sender address (default: Rapidify <hello@rapidify.app>) |
