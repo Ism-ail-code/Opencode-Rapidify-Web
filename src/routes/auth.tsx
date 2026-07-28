@@ -4,8 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useServerFn } from "@tanstack/react-start";
 import { toast } from "sonner";
 import { Sparkles, CheckCircle, ArrowLeft, Mail, Info } from "lucide-react";
-import { ensureBusinessProfile } from "@/lib/merchant.functions";
-import { sendWelcomeEmail, sendPasswordResetEmail } from "@/lib/email.functions";
+import { sendPasswordResetEmail } from "@/lib/email.functions";
+import { signupUser } from "@/lib/auth.functions";
 import { getPostAuthDestination } from "@/lib/auth-routing";
 
 export const Route = createFileRoute("/auth")({
@@ -37,7 +37,7 @@ function AuthPage() {
   const [resetLoading, setResetLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
   const [unregisteredNotice, setUnregisteredNotice] = useState(false);
-  const sendWelcome = useServerFn(sendWelcomeEmail);
+  const signup = useServerFn(signupUser);
   const sendReset = useServerFn(sendPasswordResetEmail);
 
   const isExactAuth = location.pathname === "/auth";
@@ -86,7 +86,8 @@ function AuthPage() {
       });
       if (error) throw error;
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Google sign-in failed");
+      console.error("Google OAuth error:", err);
+      toast.error(err instanceof Error && err.message ? err.message : "Google sign-in failed");
       setGoogleLoading(false);
     }
   }
@@ -98,7 +99,8 @@ function AuthPage() {
       await sendReset({ data: { email: resetEmail } });
       setResetSent(true);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to send reset email");
+      console.error("Password reset error:", err);
+      toast.error(err instanceof Error && err.message ? err.message : "Failed to send reset email");
     } finally {
       setResetLoading(false);
     }
@@ -109,41 +111,24 @@ function AuthPage() {
     setLoading(true);
     try {
       if (mode === "signup") {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/onboarding`,
-            data: {
-              email_confirmed: false,
-            },
+        const result = await signup({
+          data: {
+            email,
+            password,
+            name: email.split("@")[0],
+            redirectTo: `${window.location.origin}/auth/callback`,
           },
         });
-        if (error) throw error;
 
-        if (data.user && !data.session) {
-          setSignupSuccess(true);
-          setUnregisteredNotice(false);
-          resetForm();
-          toast.success("Check your email for the verification link!");
-          sendWelcome({ data: { email, name: email.split("@")[0] } });
-        } else if (data.session?.user) {
-          // The auth.users trigger creates this row for every signup. This
-          // explicit, authenticated upsert is a second guard and makes any RLS
-          // failure visible before navigation can begin.
-          try {
-            await ensureBusinessProfile();
-          } catch (profileError) {
-            console.error("[signup] business_profiles insert failed", profileError);
-            toast.error(profileError instanceof Error ? profileError.message : "Account created, but your merchant profile could not be initialized.", { duration: 8000 });
-            return;
-          }
-
-          setUnregisteredNotice(false);
-          toast.success("Account created! Tell us about your business to continue.");
-          sendWelcome({ data: { email, name: email.split("@")[0] } });
-          navigate({ to: "/auth/onboarding", search: { verify: undefined }, replace: true });
+        if (!result.emailSent) {
+          console.warn("[signup] User created but verification email could not be sent");
+          toast.warning("Account created! We couldn't send the verification email. Contact support or try again.", { duration: 8000 });
         }
+
+        setSignupSuccess(true);
+        setUnregisteredNotice(false);
+        resetForm();
+        toast.success("Check your email for the verification link!");
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) {
@@ -170,7 +155,11 @@ function AuthPage() {
         navigate({ to: destination, search: destination === "/auth/onboarding" ? { verify: undefined } : undefined, replace: true });
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Authentication failed");
+      console.error("Authentication error:", err);
+      const fallback = mode === "signup"
+        ? "Account creation failed. Please try again or contact support."
+        : "Authentication failed";
+      toast.error(err instanceof Error && err.message ? err.message : fallback);
     } finally {
       setLoading(false);
     }
