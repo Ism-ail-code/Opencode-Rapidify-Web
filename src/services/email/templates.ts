@@ -26,7 +26,7 @@ function baseHtml(title: string, body: string): string {
 </html>`;
 }
 
-export function welcomeEmail(name: string): string {
+export function welcomeEmail(name: string, appUrl: string): string {
   return baseHtml("Welcome to Rapidify", `
 <h1 style="margin:0 0 8px;font-size:22px;color:#0F172A">Welcome to Rapidify, ${name}!</h1>
 <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6">
@@ -57,7 +57,7 @@ To get started, complete your business profile and set up your store.
 </p>
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:24px">
 <tr><td style="background:#0F172A;border-radius:8px;padding:12px 24px;text-align:center">
-<a href="{{APP_URL}}/auth/onboarding" style="color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;display:block">Complete your profile</a>
+<a href="${appUrl}/auth/onboarding" style="color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;display:block">Complete your profile</a>
 </td></tr>
 </table>
 `);

@@ -9,7 +9,7 @@ const jobProvider = z.enum(["meshy", "tripo", "stability"]);
 
 export const createProcessingJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({
+  .validator((d: unknown) => z.object({
     product_id: z.string().uuid(),
     provider: jobProvider,
     input: z.record(z.unknown()),
@@ -69,7 +69,7 @@ export const getProcessingJobs = createServerFn({ method: "GET" })
 
 export const processJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({
+  .validator((d: unknown) => z.object({
     job_id: z.string().uuid(),
     action: z.enum(["start", "retry", "fail"]),
     error_message: z.string().optional(),
@@ -223,7 +223,7 @@ export const getDeadLetterJobs = createServerFn({ method: "GET" })
 
 export const requeueDeadLetterJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({
+  .validator((d: unknown) => z.object({
     job_id: z.string().uuid(),
   }).parse(d))
   .handler(async ({ data, context }) => {

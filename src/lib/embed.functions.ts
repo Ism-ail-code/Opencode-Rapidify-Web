@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 export const trackEvent = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({
+  .validator((d: unknown) => z.object({
     event_type: z.enum(["product_view", "page_view", "ar_widget_visible", "ar_launch", "ar_session_end", "add_to_cart", "purchase_completed", "buy_click", "qr_open", "embed_open", "variant_switch", "session_start"]),
     session_id: z.string().nullable().optional(),
     product_id: z.string().uuid().nullable().optional(),
@@ -48,7 +48,7 @@ export const trackEvent = createServerFn({ method: "POST" })
  * This server function is used internally by getEmbedScript.
  */
 export const getPublicAssetMeta = createServerFn({ method: "GET" })
-  .inputValidator((d: {
+  .validator((d: {
     merchant_slug?: string;
     external_sku?: string;
     external_product_id?: string; // legacy alias for external_sku
@@ -187,7 +187,7 @@ export const getPublicAssetMeta = createServerFn({ method: "GET" })
  *   // → <script src="/embed.js" data-merchant="alexs-furniture" data-external-sku="CHAIR-001" defer></script>
  */
 export const getEmbedScript = createServerFn({ method: "GET" })
-  .inputValidator((d: {
+  .validator((d: {
     merchant_slug: string;
     external_sku?: string;
     mount_selector?: string;

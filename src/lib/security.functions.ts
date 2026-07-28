@@ -92,7 +92,7 @@ const SCHEMA_REGISTRY = {
 } as const;
 
 export const validateInput = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({
+  .validator((d: unknown) => z.object({
     schemaName: z.string(),
     data: z.any(),
   }).parse(d))
@@ -167,7 +167,7 @@ function hexToBytes(hex: string): Uint8Array {
 }
 
 export const preventReplayAttack = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({
+  .validator((d: unknown) => z.object({
     timestamp: z.number(),
     nonce: z.string().min(8).max(64),
     maxAge: z.number().default(300000),
@@ -200,7 +200,7 @@ export const preventReplayAttack = createServerFn({ method: "POST" })
   });
 
 export const auditLog = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({
+  .validator((d: unknown) => z.object({
     action: z.string().min(1).max(100),
     resource: z.string().min(1).max(100),
     resourceId: z.string().optional(),
@@ -220,7 +220,7 @@ export const auditLog = createServerFn({ method: "POST" })
   });
 
 export const validateTenantAccess = createServerFn({ method: "POST" })
-  .inputValidator((d: unknown) => z.object({
+  .validator((d: unknown) => z.object({
     merchantId: z.string().uuid(),
     resourceType: z.enum(["products", "analytics", "jobs"]),
     resourceId: z.string().uuid(),

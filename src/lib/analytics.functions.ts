@@ -121,7 +121,7 @@ export const getConversionFunnel = createServerFn({ method: "GET" })
 
 export const getPerProductAnalytics = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({
+  .validator((d: unknown) => z.object({
     productId: z.string().uuid().optional(),
     days: z.number().int().min(1).max(90).default(30),
   }).parse(d))

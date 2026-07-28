@@ -8,7 +8,7 @@ const slugify = (s: string) =>
   s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 
 export const getPublicProduct = createServerFn({ method: "GET" })
-  .inputValidator((d: { slug: string }) => z.object({ slug: z.string().min(1).max(120) }).parse(d))
+  .validator((d: { slug: string }) => z.object({ slug: z.string().min(1).max(120) }).parse(d))
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: product, error } = await supabaseAdmin
@@ -83,7 +83,7 @@ export const listMyProducts = createServerFn({ method: "GET" })
 
 export const getMyProduct = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .validator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { data: product, error } = await context.supabase
       .from("products").select("*").eq("id", data.id).eq("business_id", context.userId).maybeSingle();
@@ -110,7 +110,7 @@ const productSchema = z.object({
 
 export const upsertProduct = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => productSchema.parse(d))
+  .validator((d: unknown) => productSchema.parse(d))
   .handler(async ({ data, context }) => {
     const { data: merchant, error: merchantError } = await context.supabase
       .from("merchants").select("id").eq("owner_id", context.userId).maybeSingle();
@@ -177,7 +177,7 @@ export const upsertProduct = createServerFn({ method: "POST" })
 
 export const deleteProduct = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
+  .validator((d: { id: string }) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
     const { error } = await context.supabase.from("products").delete().eq("id", data.id).eq("business_id", context.userId);
     if (error) throw error;
@@ -187,7 +187,7 @@ export const deleteProduct = createServerFn({ method: "POST" })
 /** Native/mobile hand-off payload. It contains no cross-tenant data. */
 export const getMobileARAsset = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ productId: z.string().uuid() }).parse(input))
+  .validator((input: unknown) => z.object({ productId: z.string().uuid() }).parse(input))
   .handler(async ({ data, context }) => {
     const { data: product, error } = await context.supabase
       .from("products")
@@ -218,7 +218,7 @@ export const getMobileARAsset = createServerFn({ method: "GET" })
  */
 export const finalizeDirectUpload = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((d: unknown) => z.object({
+  .validator((d: unknown) => z.object({
     product_id: z.string().uuid(),
     model_glb_url: z.string().url().optional().nullable(),
     model_usdz_url: z.string().url().optional().nullable(),

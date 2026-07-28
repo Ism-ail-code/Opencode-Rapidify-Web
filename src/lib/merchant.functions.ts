@@ -209,7 +209,7 @@ export const devQuickSetup = createServerFn({ method: "POST" })
 /** Completes onboarding only after the canonical business_profiles upsert succeeds. */
 export const completeOnboarding = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => OnboardingSchema.parse(input))
+  .validator((input: unknown) => OnboardingSchema.parse(input))
   .handler(async ({ context, data }) => {
     const userId = context.userId;
     const db = context.supabase;
