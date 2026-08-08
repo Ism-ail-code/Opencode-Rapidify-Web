@@ -13,9 +13,16 @@ export function EmbedSnippet({ merchantSlug, externalSku, productName }: EmbedSn
   const [copied, setCopied] = useState(false);
   const isGlobal = !externalSku;
 
+  // The snippet must point at the app's own domain (it will be pasted into the
+  // merchant's storefront, so a relative URL would resolve to the wrong host).
+  // Derive it from the current origin instead of hardcoding a production URL,
+  // which breaks local/staging deployments.
+  const embedOrigin = typeof window !== "undefined" ? window.location.origin : "https://rapidify.app";
+  const embedSrc = `${embedOrigin}/embed.js`;
+
   const scriptTag = isGlobal
-    ? `<script src="https://rapidify.app/embed.js"\n  data-merchant="${merchantSlug}"\n  defer></script>`
-    : `<script src="https://rapidify.app/embed.js"\n  data-merchant="${merchantSlug}"\n  data-external-sku="${externalSku}"\n  defer></script>`;
+    ? `<script src="${embedSrc}"\n  data-merchant="${merchantSlug}"\n  defer></script>`
+    : `<script src="${embedSrc}"\n  data-merchant="${merchantSlug}"\n  data-external-sku="${externalSku}"\n  defer></script>`;
 
   const handleCopy = async () => {
     try {

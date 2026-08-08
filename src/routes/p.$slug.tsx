@@ -17,10 +17,22 @@ export const Route = createFileRoute("/p/$slug")({
     if (!res) throw notFound();
     return res;
   },
-  head: ({ params, loaderData }) => {
+  head: async ({ params, loaderData }) => {
     const title = loaderData?.product.title ?? "Product";
     const desc = loaderData?.product.description?.slice(0, 160) ?? "View this product in augmented reality.";
     const img = loaderData?.product.thumbnail_url;
+    // Absolute URLs are required for correct SEO canonical/OG tags.
+    // SSR: derive the origin from the incoming request. Client nav: window.
+    let origin = typeof window !== "undefined" ? window.location.origin : "";
+    if (!origin) {
+      try {
+        const { getRequest } = await import("@tanstack/react-start/server");
+        origin = new URL(getRequest().url).origin;
+      } catch {
+        origin = "";
+      }
+    }
+    const pageUrl = `${origin}/p/${params.slug}`;
     return {
       meta: [
         { title: `${title} — Rapidify AR` },
@@ -28,10 +40,10 @@ export const Route = createFileRoute("/p/$slug")({
         { property: "og:title", content: title },
         { property: "og:description", content: desc },
         { property: "og:type", content: "product" },
-        { property: "og:url", content: `/p/${params.slug}` },
+        { property: "og:url", content: pageUrl },
         ...(img ? [{ property: "og:image", content: img }, { name: "twitter:image", content: img }] : []),
       ],
-      links: [{ rel: "canonical", href: `/p/${params.slug}` }],
+      links: [{ rel: "canonical", href: pageUrl }],
       scripts: loaderData ? [{
         type: "application/ld+json",
         children: JSON.stringify({

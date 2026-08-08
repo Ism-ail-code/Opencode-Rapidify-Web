@@ -6,16 +6,28 @@ import { useState } from "react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 
 export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "Rapidify — AR Commerce SaaS for Modern Brands" },
-      { name: "description", content: "Turn products into AR experiences. Upload a 3D model and ship a View-in-AR page, QR codes, and embeddable widgets in minutes." },
-      { property: "og:title", content: "Rapidify — AR Commerce SaaS" },
-      { property: "og:description", content: "AR product pages, QR sharing, and embeddable widgets for modern brands." },
-      { property: "og:url", content: "/" },
-    ],
-    links: [{ rel: "canonical", href: "/" }],
-  }),
+  head: async () => {
+    let origin = typeof window !== "undefined" ? window.location.origin : "";
+    if (!origin) {
+      try {
+        const { getRequest } = await import("@tanstack/react-start/server");
+        origin = new URL(getRequest().url).origin;
+      } catch {
+        origin = "";
+      }
+    }
+    const pageUrl = `${origin}/`;
+    return {
+      meta: [
+        { title: "Rapidify — AR Commerce SaaS for Modern Brands" },
+        { name: "description", content: "Turn products into AR experiences. Upload a 3D model and ship a View-in-AR page, QR codes, and embeddable widgets in minutes." },
+        { property: "og:title", content: "Rapidify — AR Commerce SaaS" },
+        { property: "og:description", content: "AR product pages, QR sharing, and embeddable widgets for modern brands." },
+        { property: "og:url", content: pageUrl },
+      ],
+      links: [{ rel: "canonical", href: pageUrl }],
+    };
+  },
   component: Landing,
 });
 

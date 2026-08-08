@@ -1,3 +1,14 @@
+// Escapes user-supplied values before HTML interpolation. Never trust names,
+// product titles, or URLs supplied by callers.
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
+}
+
 function baseHtml(title: string, body: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -27,8 +38,9 @@ function baseHtml(title: string, body: string): string {
 }
 
 export function welcomeEmail(name: string, appUrl: string): string {
+  const safeName = escapeHtml(name);
   return baseHtml("Welcome to Rapidify", `
-<h1 style="margin:0 0 8px;font-size:22px;color:#0F172A">Welcome to Rapidify, ${name}!</h1>
+<h1 style="margin:0 0 8px;font-size:22px;color:#0F172A">Welcome to Rapidify, ${safeName}!</h1>
 <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6">
 Your account has been created. You're one step away from bringing your products to life in 3D and AR.
 </p>
@@ -64,10 +76,11 @@ To get started, complete your business profile and set up your store.
 }
 
 export function emailVerificationLink(name: string, verificationUrl: string): string {
+  const safeName = escapeHtml(name);
   return baseHtml("Verify your email", `
 <h1 style="margin:0 0 8px;font-size:22px;color:#0F172A">Verify your email address</h1>
 <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6">
-Hi ${name}, thanks for signing up for Rapidify. Please verify your email address by clicking the button below.
+Hi ${safeName}, thanks for signing up for Rapidify. Please verify your email address by clicking the button below.
 </p>
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:24px;margin-bottom:24px">
 <tr><td style="background:#0F172A;border-radius:8px;padding:12px 24px;text-align:center">
@@ -81,10 +94,11 @@ If you did not create an account, you can safely ignore this email. The link exp
 }
 
 export function passwordResetEmail(name: string, resetUrl: string): string {
+  const safeName = escapeHtml(name);
   return baseHtml("Reset your password", `
 <h1 style="margin:0 0 8px;font-size:22px;color:#0F172A">Reset your password</h1>
 <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6">
-Hi ${name}, we received a request to reset the password for your Rapidify account. Click the button below to choose a new password.
+Hi ${safeName}, we received a request to reset the password for your Rapidify account. Click the button below to choose a new password.
 </p>
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:24px;margin-bottom:24px">
 <tr><td style="background:#0F172A;border-radius:8px;padding:12px 24px;text-align:center">
@@ -98,10 +112,12 @@ If you did not request a password reset, you can safely ignore this email. The l
 }
 
 export function onboardingCompletedEmail(name: string, businessName: string, dashboardUrl: string): string {
+  const safeName = escapeHtml(name);
+  const safeBusinessName = escapeHtml(businessName);
   return baseHtml("Your store is ready", `
-<h1 style="margin:0 0 8px;font-size:22px;color:#0F172A">Welcome aboard, ${name}!</h1>
+<h1 style="margin:0 0 8px;font-size:22px;color:#0F172A">Welcome aboard, ${safeName}!</h1>
 <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6">
-Your business profile for <strong>${businessName}</strong> is complete and your merchant workspace is live.
+Your business profile for <strong>${safeBusinessName}</strong> is complete and your merchant workspace is live.
 </p>
 <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6">
 Here are your next steps:
@@ -135,10 +151,12 @@ Here are your next steps:
 }
 
 export function arModelReadyEmail(name: string, productName: string, productUrl: string): string {
-  return baseHtml(`Your 3D model for ${productName} is ready`, `
+  const safeName = escapeHtml(name);
+  const safeProductName = escapeHtml(productName);
+  return baseHtml(`Your 3D model for ${safeProductName} is ready`, `
 <h1 style="margin:0 0 8px;font-size:22px;color:#0F172A">Your 3D model is ready!</h1>
 <p style="margin:0 0 16px;font-size:15px;color:#475569;line-height:1.6">
-Hi ${name}, the 3D model for <strong>${productName}</strong> has finished processing and is ready to use.
+Hi ${safeName}, the 3D model for <strong>${safeProductName}</strong> has finished processing and is ready to use.
 </p>
 <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px">
 <tr><td style="background:#f0fdf4;border-radius:12px;padding:16px">
