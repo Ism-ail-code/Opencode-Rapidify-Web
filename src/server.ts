@@ -5,6 +5,7 @@ import { renderErrorPage } from "./lib/error-page";
 import { logger, config, getObservabilityHeaders } from "./lib/infrastructure";
 import { handleShopifyWebhookRequest } from "./lib/shopify-webhook.server";
 import { handlePublicAssetMetaRequest } from "./lib/public-asset-meta.server";
+import { handleMeshyWebhookRequest, handleTripoWebhookRequest } from "./lib/webhooks.functions";
 
 type ServerEntry = {
   fetch: (request: Request, env: unknown, ctx: unknown) => Promise<Response> | Response;
@@ -52,6 +53,12 @@ export default {
       const pathname = new URL(request.url).pathname;
       if (pathname === "/api/webhooks/shopify") {
         return await handleShopifyWebhookRequest(request);
+      }
+      if (pathname === "/api/webhooks/meshy") {
+        return await handleMeshyWebhookRequest(request);
+      }
+      if (pathname === "/api/webhooks/tripo") {
+        return await handleTripoWebhookRequest(request);
       }
       if (pathname === "/api/public/asset-meta") {
         return await handlePublicAssetMetaRequest(request);

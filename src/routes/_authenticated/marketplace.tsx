@@ -9,7 +9,7 @@ import { RefreshCw, Check, X, Store, Link as LinkIcon, Package, AlertCircle } fr
 
 const catalogItemsOpts = queryOptions({
   queryKey: ["external-catalog-items"],
-  queryFn: () => listExternalCatalogItems({ data: { status: "pending" } }),
+  queryFn: () => listExternalCatalogItems({ data: { status: "unprocessed" } }),
 });
 
 const connectionsOpts = queryOptions({
@@ -36,11 +36,12 @@ function MarketplacePage() {
   const [connecting, setConnecting] = useState(false);
   const [newVendor, setNewVendor] = useState<"daraz" | "amazon" | "shopify">("daraz");
   const [newStoreUrl, setNewStoreUrl] = useState("");
+  const [newToken, setNewToken] = useState("");
 
   const handleApprove = async (itemId: string) => {
     try {
-      await approve({ data: { item_id: itemId } });
-      toast.success("Item approved and synced");
+      await approve({ data: { item_id: itemId, create_processing_job: true } });
+      toast.success("Item approved — 3D generation queued");
       await qc.invalidateQueries({ queryKey: ["external-catalog-items"] });
       await qc.invalidateQueries({ queryKey: ["my-products"] });
     } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
@@ -66,12 +67,14 @@ function MarketplacePage() {
 
   const handleConnect = async () => {
     if (!newStoreUrl.trim()) { toast.error("Store URL is required"); return; }
+    if (!newToken.trim()) { toast.error("API token is required"); return; }
     setConnecting(true);
     try {
-      await createConn({ data: { vendor: newVendor, store_url: newStoreUrl.trim(), access_token: "pending" } });
+      await createConn({ data: { vendor: newVendor, store_url: newStoreUrl.trim(), access_token: newToken.trim() } });
       toast.success("Connection created. Run a sync to fetch products.");
       await qc.invalidateQueries({ queryKey: ["marketplace-connections"] });
       setNewStoreUrl("");
+      setNewToken("");
     } catch (e) { toast.error(e instanceof Error ? e.message : "Failed"); }
     setConnecting(false);
   };
@@ -136,9 +139,16 @@ function MarketplacePage() {
                   onChange={e => setNewStoreUrl(e.target.value)}
                   className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground"
                 />
+                <input
+                  type="password"
+                  placeholder="API token"
+                  value={newToken}
+                  onChange={e => setNewToken(e.target.value)}
+                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground"
+                />
                 <button
                   onClick={handleConnect}
-                  disabled={connecting || !newStoreUrl.trim()}
+                  disabled={connecting || !newStoreUrl.trim() || !newToken.trim()}
                   className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50"
                 >
                   <LinkIcon className="h-3.5 w-3.5" />

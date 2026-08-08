@@ -2,8 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { DashboardShell } from "@/components/DashboardShell";
 import { useQuery, useMutation, useQueryClient, queryOptions } from "@tanstack/react-query";
 import { getMyMerchant } from "@/lib/merchant.functions";
-import { supabase } from "@/integrations/supabase/client";
-import { Store, Plug, CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
+import { listMarketplaceConnections, createMarketplaceConnection, deleteMarketplaceConnection } from "@/lib/marketplace.functions";
+import { useServerFn } from "@tanstack/react-start";
+import { Store, Plug, CheckCircle2, AlertCircle, ExternalLink, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -14,8 +15,13 @@ export const Route = createFileRoute("/_authenticated/settings")({
 
 const merchantOpts = queryOptions({ queryKey: ["my-merchant"], queryFn: () => getMyMerchant() });
 
+const connectionsOpts = queryOptions({
+  queryKey: ["marketplace-connections"],
+  queryFn: () => listMarketplaceConnections(),
+});
+
 interface PlatformConfig {
-  id: string;
+  id: "daraz" | "amazon" | "shopify";
   name: string;
   description: string;
   icon: string;
@@ -41,46 +47,70 @@ const PLATFORMS: PlatformConfig[] = [
     placeholder: "daraz_seller_api_token",
   },
   {
-    id: "woocommerce",
-    name: "WooCommerce",
-    description: "Link your WordPress WooCommerce store via REST API keys for product synchronization.",
-    icon: "🛒",
-    color: "bg-purple-500/10 text-purple-600",
-    placeholder: "ck_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    id: "amazon",
+    name: "Amazon",
+    description: "Connect your Amazon Seller account via SP-API to sync catalog items and offers.",
+    icon: "📦",
+    color: "bg-blue-500/10 text-blue-600",
+    placeholder: "amazon_sp_api_token",
   },
 ];
+
+interface Connection {
+  id: string;
+  platform: string;
+  store_url: string | null;
+  store_name: string;
+  status: string;
+  last_sync_at: string | null;
+}
 
 function ConnectionCard({ platform, merchantId, existingConnection }: {
   platform: PlatformConfig;
   merchantId: string;
-  existingConnection?: { status: string; store_name: string } | null;
+  existingConnection?: Connection | null;
 }) {
   const [token, setToken] = useState("");
+  const [storeUrl, setStoreUrl] = useState("");
   const [isConnecting, setIsConnecting] = useState(false);
   const queryClient = useQueryClient();
+  const createConn = useServerFn(createMarketplaceConnection);
+  const deleteConn = useServerFn(deleteMarketplaceConnection);
 
   const handleConnect = async () => {
     if (!token.trim()) {
       toast.error("Please enter an API token");
       return;
     }
+    if (!storeUrl.trim()) {
+      toast.error("Please enter your store URL");
+      return;
+    }
     setIsConnecting(true);
     try {
-      const { error } = await supabase.from("marketplace_connections").insert({
-        merchant_id: merchantId,
-        platform: platform.id,
-        oauth_token_hash: btoa(token.trim()),
-        store_name: `${platform.name} Store`,
-        status: "pending",
+      await createConn({
+        data: { vendor: platform.id, store_url: storeUrl.trim(), access_token: token.trim() },
       });
-      if (error) throw error;
-      toast.success(`${platform.name} connection initiated. Sync will begin shortly.`);
+      toast.success(`${platform.name} connection created. Run a sync to fetch your catalog.`);
       setToken("");
-      queryClient.invalidateQueries({ queryKey: ["my-merchant"] });
+      setStoreUrl("");
+      queryClient.invalidateQueries({ queryKey: ["marketplace-connections"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Connection failed");
     } finally {
       setIsConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!existingConnection) return;
+    if (!confirm(`Remove the ${platform.name} connection?`)) return;
+    try {
+      await deleteConn({ data: { id: existingConnection.id } });
+      toast.success(`${platform.name} connection removed`);
+      queryClient.invalidateQueries({ queryKey: ["marketplace-connections"] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Disconnect failed");
     }
   };
 
@@ -105,7 +135,7 @@ function ConnectionCard({ platform, merchantId, existingConnection }: {
         )}
         {!isConnected && existingConnection && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-xs font-medium text-amber-700">
-            <AlertCircle className="h-3.5 w-3.5" /> Pending
+            <AlertCircle className="h-3.5 w-3.5" /> {existingConnection.status}
           </span>
         )}
       </div>
@@ -113,14 +143,30 @@ function ConnectionCard({ platform, merchantId, existingConnection }: {
       {isConnected ? (
         <div className="mt-5 flex items-center gap-3">
           <div className="flex-1 rounded-lg bg-slate-50 px-4 py-2.5 text-sm text-slate-600">
-            Store: {existingConnection?.store_name || platform.name}
+            Store: {existingConnection.store_url || existingConnection.store_name || platform.name}
+            {existingConnection.last_sync_at && (
+              <span className="text-slate-400"> · Last sync {new Date(existingConnection.last_sync_at).toLocaleDateString()}</span>
+            )}
           </div>
-          <button className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-[#0F172A] transition hover:bg-slate-50">
-            <ExternalLink className="h-3.5 w-3.5" /> Manage
+          <button
+            onClick={handleDisconnect}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-4 py-2.5 text-sm font-medium text-red-600 transition hover:bg-red-50"
+          >
+            <Trash2 className="h-3.5 w-3.5" /> Disconnect
           </button>
         </div>
       ) : (
         <div className="mt-5 space-y-3">
+          <div>
+            <label className="text-xs font-medium uppercase tracking-wider text-slate-500">Store URL</label>
+            <input
+              type="url"
+              value={storeUrl}
+              onChange={(e) => setStoreUrl(e.target.value)}
+              placeholder={platform.id === "shopify" ? "https://your-store.myshopify.com" : "https://your-store.example.com"}
+              className="mt-1 w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-[#0F172A] outline-none transition placeholder:text-slate-300 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20"
+            />
+          </div>
           <div>
             <label className="text-xs font-medium uppercase tracking-wider text-slate-500">API Client Token</label>
             <input
@@ -133,11 +179,11 @@ function ConnectionCard({ platform, merchantId, existingConnection }: {
           </div>
           <button
             onClick={handleConnect}
-            disabled={isConnecting || !token.trim()}
+            disabled={isConnecting || !token.trim() || !storeUrl.trim()}
             className="inline-flex items-center gap-2 rounded-lg bg-[#2563EB] px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plug className="h-4 w-4" />
-            {isConnecting ? "Connecting..." : "Sync Store Inventory"}
+            {isConnecting ? "Connecting..." : "Connect Store"}
           </button>
         </div>
       )}
@@ -147,6 +193,7 @@ function ConnectionCard({ platform, merchantId, existingConnection }: {
 
 function SettingsPage() {
   const { data: merchant, isLoading } = useQuery(merchantOpts);
+  const { data: connections } = useQuery(connectionsOpts);
 
   if (isLoading) {
     return (
@@ -183,14 +230,17 @@ function SettingsPage() {
             </p>
           </div>
           <div className="space-y-4">
-            {PLATFORMS.map((platform) => (
-              <ConnectionCard
-                key={platform.id}
-                platform={platform}
-                merchantId={merchant.id}
-                existingConnection={null}
-              />
-            ))}
+            {PLATFORMS.map((platform) => {
+              const existing = (connections ?? []).find((c) => c.platform === platform.id) ?? null;
+              return (
+                <ConnectionCard
+                  key={platform.id}
+                  platform={platform}
+                  merchantId={merchant.id}
+                  existingConnection={existing}
+                />
+              );
+            })}
           </div>
         </div>
       </div>

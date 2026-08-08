@@ -122,6 +122,26 @@ export const createMarketplaceConnection = createServerFn({ method: "POST" })
       status: "active",
     });
     if (error) throw error;
+
+    // Mirror into store_integrations so inbound webhook resolution
+    // (e.g. Shopify HMAC → business_id) finds this connection without the
+    // slower marketplace_connections ilike fallback.
+    try {
+      await context.supabase.from("store_integrations").upsert(
+        {
+          business_id: context.userId,
+          platform: data.vendor,
+          store_url: data.store_url,
+          status: "active",
+        },
+        { onConflict: "business_id,platform,store_url" },
+      );
+    } catch (mirrorErr) {
+      // A failed mirror must not invalidate the connection itself, but it
+      // must be visible for debugging webhook resolution.
+      console.error("[createMarketplaceConnection] Failed to mirror store_integration", mirrorErr);
+    }
+
     return { ok: true };
   });
 
@@ -129,8 +149,26 @@ export const deleteMarketplaceConnection = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((d: unknown) => z.object({ id: z.string().uuid() }).parse(d))
   .handler(async ({ data, context }) => {
+    // Resolve the connection so we can clean up its store_integrations mirror.
+    const { data: connection } = await context.supabase
+      .from("marketplace_connections")
+      .select("id, business_id, platform, store_url")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (!connection) throw new Error("Connection not found");
+
     const { error } = await context.supabase.from("marketplace_connections").delete().eq("id", data.id);
     if (error) throw error;
+
+    if (connection.business_id && connection.store_url) {
+      await context.supabase
+        .from("store_integrations")
+        .delete()
+        .eq("business_id", connection.business_id)
+        .eq("platform", connection.platform)
+        .eq("store_url", connection.store_url);
+    }
+
     return { ok: true };
   });
 
@@ -306,6 +344,7 @@ export const approveCatalogItem = createServerFn({ method: "POST" })
       const { data: product, error: prodErr } = await context.supabase
         .from("products")
         .insert({
+          business_id: context.userId,
           merchant_id: connection.merchant_id,
           title: item.title,
           slug: `ext-${item.external_sku}-${Date.now().toString(36)}`,
@@ -327,12 +366,14 @@ export const approveCatalogItem = createServerFn({ method: "POST" })
         .eq("id", data.item_id);
 
       // Queue processing job (credit already deducted above)
+      const { getDefaultProvider } = await import("@/lib/config.server");
       await context.supabase.from("processing_jobs").insert({
         product_id: product.id,
+        business_id: context.userId,
         merchant_id: connection.merchant_id,
-        provider: "meshy",
+        provider: getDefaultProvider(),
         status: "queued",
-        input: { source: "marketplace_sync", external_sku: item.external_sku, image_urls: item.image_urls },
+        input: { source: "marketplace_sync", external_sku: item.external_sku, image_url: item.image_urls?.[0] ?? null, billed: true },
         retries: 0,
         max_retries: 5,
         next_retry_at: new Date(Date.now() + 1000).toISOString(),

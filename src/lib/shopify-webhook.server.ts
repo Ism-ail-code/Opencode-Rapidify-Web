@@ -205,11 +205,12 @@ export async function syncShopifyProduct(businessId: string, topic: string, payl
   if (jobLookupError) throw jobLookupError;
 
   if (!pendingJob) {
+    const { getDefaultProvider } = await import("@/lib/config.server");
     const { error: jobError } = await supabaseAdmin.from("processing_jobs").insert({
       business_id: businessId,
       merchant_id: merchantId,
       product_id: syncedProductId,
-      provider: "meshy",
+      provider: getDefaultProvider(),
       status: "queued",
       input: { source: "shopify_webhook", topic, external_product_id: externalProductId, external_sku: externalSku, image_url: imageUrl },
       retries: 0,

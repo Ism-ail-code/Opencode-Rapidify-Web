@@ -58,11 +58,20 @@ async function upsertProductFromWebhook(params: {
   imageUrls: string[];
   buyUrl: string | null;
 }) {
+  // Resolve the owning auth user (business_id) so RLS and model rows work.
+  const { data: merchant } = await supabaseAdmin
+    .from("merchants")
+    .select("owner_id")
+    .eq("id", params.merchantId)
+    .maybeSingle();
+  const businessId = merchant?.owner_id ?? null;
+
   const slug = slugify(params.title) + "-" + params.externalSku.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 8);
 
   const { data: product, error: prodErr } = await supabaseAdmin
     .from("products")
     .upsert({
+      business_id: businessId,
       merchant_id: params.merchantId,
       title: params.title,
       slug,
@@ -87,14 +96,16 @@ async function upsertProductFromWebhook(params: {
       .maybeSingle();
 
     if (!existingJob) {
+      const { getDefaultProvider } = await import("@/lib/config.server");
       await supabaseAdmin
         .from("processing_jobs")
         .insert({
           product_id: product.id,
+          business_id: businessId,
           merchant_id: params.merchantId,
-          provider: "meshy",
+          provider: getDefaultProvider(),
           status: "queued",
-          input: { source: "webhook_sync", external_sku: params.externalSku, image_urls: params.imageUrls },
+          input: { source: "webhook_sync", external_sku: params.externalSku, image_url: params.imageUrls[0] ?? null },
           retries: 0,
           max_retries: 5,
           next_retry_at: new Date(Date.now() + 1000).toISOString(),
