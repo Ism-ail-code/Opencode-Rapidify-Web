@@ -1,5 +1,6 @@
 import { runWorker } from "./job-worker";
 import { ensureBuckets } from "../lib/storage";
+import { loadEnvFile } from "./load-env";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -60,6 +61,9 @@ async function cycle(): Promise<boolean> {
 // Main loop
 // ---------------------------------------------------------------------------
 async function main(): Promise<void> {
+  // Load .env as a fallback so the worker works with `npm run worker` alone.
+  loadEnvFile();
+
   console.log("=".repeat(60));
   console.log("[Runner] AR Commerce Platform — Background Job Worker");
   console.log(`[Runner] PID: ${process.pid}`);
