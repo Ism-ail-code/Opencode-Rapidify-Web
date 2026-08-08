@@ -133,6 +133,7 @@ export async function validateWebhookSignature(
   signature: string,
   secret: string
 ): Promise<boolean> {
+  if (!payload || !signature || !secret) return false;
   try {
     const encoder = new TextEncoder();
     const keyData = encoder.encode(secret);
@@ -152,18 +153,46 @@ export async function validateWebhookSignature(
       ["verify"]
     );
 
-    return await subtle.verify("HMAC", key, hexToBytes(signature) as unknown as BufferSource, messageData as unknown as BufferSource);
+    // Providers differ in encoding: Shopify sends base64, others hex.
+    // Try both so a valid signature is never rejected for the wrong format.
+    const candidates = [signature.trim(), hexToBytes(signature), fromBase64(signature)]
+      .filter((c): c is string | Uint8Array => typeof c === "string" || c.length > 0);
+
+    for (const candidate of candidates) {
+      const bytes = typeof candidate === "string" ? encoder.encode(candidate) : candidate;
+      const valid = await subtle.verify(
+        "HMAC",
+        key,
+        bytes as unknown as BufferSource,
+        messageData as unknown as BufferSource,
+      );
+      if (valid) return true;
+    }
+
+    return false;
   } catch {
     return false;
   }
 }
 
 function hexToBytes(hex: string): Uint8Array {
+  if (!/^[0-9a-fA-F]+$/.test(hex) || hex.length % 2 !== 0) return new Uint8Array(0);
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < hex.length; i += 2) {
     bytes[i / 2] = parseInt(hex.substring(i, i + 2), 16);
   }
   return bytes;
+}
+
+function fromBase64(value: string): Uint8Array {
+  try {
+    const binary = atob(value);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return bytes;
+  } catch {
+    return new Uint8Array(0);
+  }
 }
 
 export const preventReplayAttack = createServerFn({ method: "POST" })
