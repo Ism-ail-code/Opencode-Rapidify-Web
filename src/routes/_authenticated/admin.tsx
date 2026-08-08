@@ -5,7 +5,12 @@ import { getProcessingJobs, processJob } from "@/lib/jobs.functions";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
-const opts = queryOptions({ queryKey: ["processing-jobs"], queryFn: () => getProcessingJobs() });
+const opts = queryOptions({
+  queryKey: ["processing-jobs"],
+  queryFn: () => getProcessingJobs(),
+  refetchInterval: (q) =>
+    q.state.data?.some((j) => ["queued", "processing", "optimizing"].includes(j.status)) ? 15_000 : false,
+});
 
 export const Route = createFileRoute("/_authenticated/admin")({
   head: () => ({ meta: [{ title: "Admin — Rapidify" }, { name: "robots", content: "noindex" }] }),

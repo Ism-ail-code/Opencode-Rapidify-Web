@@ -34,8 +34,9 @@ function EditPage() {
   const { data: processingJobs } = useSuspenseQuery(
     queryOptions({
       queryKey: ["processing-jobs", id],
-      queryFn: () => getProcessingJobs(),
-      select: (jobs) => jobs.filter(job => job.product_id === id),
+      queryFn: () => getProcessingJobs({ data: { product_id: id } }),
+      refetchInterval: (q) =>
+        q.state.data?.some((j) => ["queued", "processing", "optimizing"].includes(j.status)) ? 10_000 : false,
     })
   );
 

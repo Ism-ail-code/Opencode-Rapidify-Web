@@ -132,7 +132,17 @@ function List() {
                     "bg-slate-100 text-slate-500"
                   }`}>{p?.status || "unknown"}</span>
                 </td>
-                <td className="px-4 py-3 text-xs text-slate-500">{p?.ar_ready ? "Ready" : "Not ready"}</td>
+                <td className="px-4 py-3">
+                  {p?.generating ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-500" /> Processing…
+                    </span>
+                  ) : p?.ar_ready ? (
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Ready</span>
+                  ) : (
+                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">Not ready</span>
+                  )}
+                </td>
                 <td className="px-4 py-3 text-slate-500">
                   {typeof p?.price_cents === "number" ? `$${(p.price_cents / 100).toFixed(2)}` : "$0.00"}
                 </td>

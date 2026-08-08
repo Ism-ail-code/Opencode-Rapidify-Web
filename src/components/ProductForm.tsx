@@ -1,7 +1,12 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { Trash2, Upload, X, Smartphone, Scan, FileWarning, Sparkles, Check } from "lucide-react";
+import { Trash2, Upload, X, Smartphone, Scan, FileWarning, Sparkles, Check, Loader2 } from "lucide-react";
 import QRCode from "qrcode";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { enqueueAiGeneration } from "@/lib/generation.functions";
+import { getProcessingJobs } from "@/lib/jobs.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 type ProductInput = {
   title: string; slug?: string; description?: string | null;
@@ -48,6 +53,18 @@ export function ProductForm({ initial, onSubmit, onDelete }: {
 
   const productId = initial?.id;
   const isExisting = !!productId;
+
+  // Generation job state — disables "Generate with AI" while a job is in flight.
+  const qc = useQueryClient();
+  const enqueueFn = useServerFn(enqueueAiGeneration);
+  const { data: productJobs = [] } = useQuery({
+    queryKey: ["processing-jobs", productId],
+    queryFn: () => getProcessingJobs({ data: { product_id: productId! } }),
+    enabled: !!productId,
+    refetchInterval: (q) =>
+      q.state.data?.some((j) => ["queued", "processing", "optimizing"].includes(j.status)) ? 10_000 : false,
+  });
+  const generationInFlight = productJobs.some((j) => ["queued", "processing", "optimizing"].includes(j.status));
 
   // QR code URL for mobile app handoff
   const qrUrl = useMemo(() => {
@@ -147,15 +164,43 @@ export function ProductForm({ initial, onSubmit, onDelete }: {
   };
 
   const handleAiGenerate = async () => {
-    if (aiPhotos.length < 3) {
-      alert("Upload at least 3 photos for AI reconstruction");
+    if (!productId) {
+      toast.error("Save the product first — then generate with AI from this page.");
       return;
     }
+    if (aiPhotos.length === 0 && !form.thumbnail_url) {
+      toast.error("Upload a thumbnail or at least one photo to use as the 3D source image.");
+      return;
+    }
+    if (generationInFlight) {
+      toast.error("A generation job is already running for this product.");
+      return;
+    }
+
     setAiGenerating(true);
     try {
-      // TODO: Implement actual AI generation via server function
-      // For now, show a message that AI generation is processing
-      alert("AI generation queued. This feature requires backend AI pipeline integration.");
+      let sourceUrl = form.thumbnail_url;
+      if (!sourceUrl && aiPhotos.length > 0) {
+        // Promote the first photo to be the thumbnail — it becomes the
+        // provider's source image.
+        sourceUrl = await uploadToStorage(aiPhotos[0], "thumbnails");
+      }
+
+      if (sourceUrl && sourceUrl !== form.thumbnail_url) {
+        // Persist the thumbnail so the server job sees it (upsertProduct is
+        // the edit page's save handler).
+        await onSubmit({ ...form, thumbnail_url: sourceUrl });
+      }
+
+      const { job } = await enqueueFn({ data: { product_id: productId } });
+      await qc.invalidateQueries({ queryKey: ["processing-jobs"] });
+      toast.success(
+        job.provider === "simulated"
+          ? "Generation queued (demo mode — no model will be produced until a provider is attached)."
+          : "Generation queued — we'll email you when your 3D model is ready."
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to queue generation");
     } finally {
       setAiGenerating(false);
     }
@@ -395,14 +440,14 @@ export function ProductForm({ initial, onSubmit, onDelete }: {
         {/* AI Photo Upload Zone */}
         <div>
           <p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Multi-Angle Photos for AI (3–5 photos)
+            Multi-Angle Photos (optional — the thumbnail is the 3D source)
           </p>
           <input ref={aiPhotoInputRef} type="file" accept="image/jpeg,image/png,image/webp" multiple className="hidden"
             onChange={handleAiPhotoUpload} />
           <button type="button" onClick={() => aiPhotoInputRef.current?.click()}
             className="w-full rounded-lg border border-dashed border-border bg-background/50 px-4 py-6 text-sm transition hover:bg-muted/50 flex flex-col items-center gap-2">
             <Upload className="h-5 w-5 text-muted-foreground" />
-            <span className="text-muted-foreground">Drop 3–5 photos or click to browse</span>
+            <span className="text-muted-foreground">Drop photos or click to browse</span>
             <span className="text-[10px] text-muted-foreground">Front, back, left, right, top angles recommended</span>
           </button>
 
@@ -420,15 +465,26 @@ export function ProductForm({ initial, onSubmit, onDelete }: {
             </div>
           )}
 
-          <button type="button" onClick={handleAiGenerate} disabled={aiPhotos.length < 3 || aiGenerating || hasDirectModels}
-            className="mt-3 w-full rounded-lg bg-foreground px-4 py-2.5 text-sm font-medium text-background transition hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed">
-            {aiGenerating ? "Generating..." : `Generate with AI (${aiPhotos.length}/5 photos)`}
+          <button type="button" onClick={handleAiGenerate}
+            disabled={!productId || generationInFlight || aiGenerating || hasDirectModels}
+            className="mt-3 w-full rounded-lg bg-foreground px-4 py-2.5 text-sm font-medium text-background transition hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2">
+            {aiGenerating ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /> Queuing generation…</>
+            ) : generationInFlight ? (
+              <><Loader2 className="h-4 w-4 animate-spin" /> Generating (queued)…</>
+            ) : (
+              <><Sparkles className="h-4 w-4" /> Generate with AI{aiPhotos.length > 0 ? ` (${aiPhotos.length} photo${aiPhotos.length === 1 ? "" : "s"})` : ""}</>
+            )}
           </button>
-          {hasDirectModels && (
-            <p className="mt-1.5 text-[10px] text-muted-foreground">
-              AI generation disabled — direct 3D models are attached from Option A.
-            </p>
-          )}
+          <div className="mt-1.5 space-y-1 text-[10px] text-muted-foreground">
+            {!productId && <p>Save the product first — then generate with AI from this page.</p>}
+            {hasDirectModels && (
+              <p>AI generation disabled — direct 3D models are attached from Option A.</p>
+            )}
+            {productId && !hasDirectModels && !generationInFlight && (
+              <p>Uses your thumbnail as the 3D source image and costs 1 credit.</p>
+            )}
+          </div>
         </div>
       </div>
 
