@@ -16,6 +16,21 @@ import process from "node:process";
 //     and server (analytics IDs, public URLs). Define in .env with the
 //     VITE_ prefix. Never put secrets here — they ship to the browser.
 
+export type DefaultProvider = "meshy" | "tripo" | "simulated";
+
+/**
+ * The provider used when the UI enqueues a 3D generation job.
+ * Defaults to "simulated" so the pipeline runs end-to-end without API keys;
+ * switch to "meshy" (or "tripo") + set the matching API key when ready.
+ */
+export function getDefaultProvider(): DefaultProvider {
+  const provider = process.env.AI_PROVIDER?.trim().toLowerCase();
+  if (provider === "meshy" || provider === "tripo" || provider === "simulated") {
+    return provider;
+  }
+  return "simulated";
+}
+
 export function getServerConfig() {
   return {
     nodeEnv: process.env.NODE_ENV,
@@ -26,6 +41,7 @@ export function getServerConfig() {
     supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY,
 
     // AI providers
+    defaultProvider: getDefaultProvider(),
     meshyApiUrl: process.env.MESHY_API_URL ?? "https://api.meshy.ai",
     meshyApiKey: process.env.MESHY_API_KEY,
     tripoApiUrl: process.env.TRIPO_API_URL ?? "https://api.tripo3d.ai/v2/openapi",
