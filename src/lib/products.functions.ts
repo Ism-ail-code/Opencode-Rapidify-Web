@@ -2,7 +2,6 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { mobileARBehavior } from "@/lib/ar-integration";
-import { CREDIT_COSTS } from "@/lib/credits.functions";
 
 const slugify = (s: string) =>
   s.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
@@ -72,13 +71,33 @@ export const listMyProducts = createServerFn({ method: "GET" })
       .eq("business_id", context.userId)
       .order("updated_at", { ascending: false });
     if (error) throw error;
-    return (data ?? []).map((product) => ({
-      ...product,
-      image_url: product.image_url || product.thumbnail_url || "/placeholder.png",
-      sku: product.external_sku || "—",
-      model_url: product.model_glb_url || product.model_usdz_url || null,
-      ar_ready: Boolean(product.model_glb_url || product.model_usdz_url),
-    }));
+
+    // Latest generation job per product (for "Processing…" badges)
+    const productIds = (data ?? []).map((p) => p.id);
+    const jobStatusMap = new Map<string, string>();
+    if (productIds.length > 0) {
+      const { data: jobs } = await context.supabase
+        .from("processing_jobs")
+        .select("product_id, status")
+        .in("product_id", productIds)
+        .order("created_at", { ascending: false });
+      for (const job of jobs ?? []) {
+        if (job.product_id && !jobStatusMap.has(job.product_id)) jobStatusMap.set(job.product_id, job.status);
+      }
+    }
+
+    return (data ?? []).map((product) => {
+      const generationStatus = jobStatusMap.get(product.id) ?? null;
+      return {
+        ...product,
+        image_url: product.image_url || product.thumbnail_url || "/placeholder.png",
+        sku: product.external_sku || "—",
+        model_url: product.model_glb_url || product.model_usdz_url || null,
+        ar_ready: Boolean(product.model_glb_url || product.model_usdz_url),
+        generation_status: generationStatus,
+        generating: generationStatus !== null && ["queued", "processing", "optimizing"].includes(generationStatus),
+      };
+    });
   });
 
 export const getMyProduct = createServerFn({ method: "GET" })
@@ -145,33 +164,10 @@ export const upsertProduct = createServerFn({ method: "POST" })
       .from("products").insert(payload).select().single();
     if (error) throw error;
 
-    // For new products with AI generation (no direct 3D files), deduct credits and queue a job.
-    // Direct uploads (GLB/USDZ) bypass the queue and go live instantly.
-    const hasDirectModels = !!(data.model_glb_url || data.model_usdz_url);
-    if (!hasDirectModels) {
-      // Deduct credits before queueing
-      const { data: ok } = await context.supabase.rpc("deduct_credits", {
-        _merchant_id: merchantId,
-        _amount: CREDIT_COSTS.processing_job,
-        _reason: "processing_job",
-        _ref_id: ins.id,
-      });
-      if (!ok) {
-        // Insufficient credits — roll back the product insert
-        await context.supabase.from("products").delete().eq("id", ins.id);
-        throw new Error("Insufficient credits for 3D generation");
-      }
-
-      await context.supabase
-        .from("processing_jobs")
-        .insert({
-          product_id: ins.id, merchant_id: merchantId, business_id: context.userId, provider: "meshy",
-          status: "queued", input: { source: "manual_upload" },
-          retries: 0, max_retries: 5,
-          next_retry_at: new Date(Date.now() + 1000).toISOString(),
-        });
-    }
-
+    // NOTE: Saving a product never charges credits or queues a job by itself.
+    // AI generation is an explicit action (ProductForm → enqueueAiGeneration)
+    // that deducts one credit and queues the job. Direct uploads (GLB/USDZ)
+    // bypass the queue and go live instantly.
     return ins;
   });
 
