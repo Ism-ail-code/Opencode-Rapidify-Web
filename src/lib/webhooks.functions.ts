@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { transferRemoteFile, productAssetPath } from "@/lib/storage";
 import { z } from "zod";
-import { sendModelReadyEmail } from "@/lib/email.functions";
+import { notifyModelReady } from "@/lib/model-notifications";
 
 // ---------------------------------------------------------------------------
 // Shared completion logic (used by both Meshy and Tripo webhooks)
@@ -18,24 +18,86 @@ interface CompletionParams {
   errorMessage?: string;
 }
 
-async function handleCompletion(params: CompletionParams): Promise<{ ok: boolean; message: string }> {
-  const { provider, taskId, status, glbUrl, usdzUrl, thumbnailUrl, polygonCount, errorMessage } = params;
+type MatchableJob = {
+  id: string;
+  product_id: string;
+  merchant_id: string;
+  business_id: string | null;
+  status: string;
+  retries: number | null;
+  max_retries: number | null;
+  input: Record<string, unknown> | null;
+  output: Record<string, unknown> | null;
+};
 
-  // 1. Find matching processing job
+/** Finds the job for a provider task by the persisted input.task_id. */
+async function findJobByTaskId(provider: string, taskId: string): Promise<MatchableJob | null> {
+  // Direct JSONB filter — no scan, works at any queue depth.
+  const { data: direct, error: directError } = await supabaseAdmin
+    .from("processing_jobs")
+    .select("*")
+    .eq("provider", provider)
+    .eq("input->>task_id", taskId)
+    .limit(1);
+
+  if (!directError && direct?.[0]) return direct[0] as MatchableJob;
+
+  // Fallback for legacy rows without a persisted task_id: match output.model_id.
   const { data: jobs } = await supabaseAdmin
     .from("processing_jobs")
     .select("*")
     .eq("provider", provider)
-    .eq("status", "processing")
     .order("created_at", { ascending: false })
-    .limit(50);
+    .limit(200);
 
-  const matched = (jobs ?? []).find((j) => {
-    const inp = j.input as Record<string, unknown>;
+  const legacy = (jobs ?? []).find((j) => {
     const out = j.output as Record<string, unknown> | null;
-    return inp?.task_id === taskId || out?.model_id === taskId;
+    return out?.model_id === taskId;
   });
+  return (legacy as MatchableJob | undefined) ?? null;
+}
 
+/**
+ * Compare-and-swap: mark the job "ready" only if it is still in flight.
+ * Returns false when another path (e.g. the worker poll loop) already did.
+ */
+async function markJobCompleted(
+  jobId: string,
+  taskId: string,
+  glbUrl: string,
+  usdzUrl: string,
+  thumbnailUrl: string | null,
+  polygonCount: number | null,
+): Promise<boolean> {
+  const now = new Date().toISOString();
+  const { data: updated, error } = await supabaseAdmin
+    .from("processing_jobs")
+    .update({
+      status: "ready",
+      completed_at: now,
+      output: { model_id: taskId, glb_url: glbUrl, usdz_url: usdzUrl, thumbnail_url: thumbnailUrl, polygon_count: polygonCount },
+      updated_at: now,
+    })
+    .eq("id", jobId)
+    .in("status", ["processing", "optimizing"])
+    .select("id")
+    .maybeSingle();
+
+  if (error) {
+    console.error(`[Webhook] Failed to complete job ${jobId}:`, error.message);
+    return false;
+  }
+  return Boolean(updated?.id);
+}
+
+async function handleCompletion(params: CompletionParams): Promise<{ ok: boolean; message: string }> {
+  const { provider, taskId, status, glbUrl, usdzUrl, thumbnailUrl, polygonCount, errorMessage } = params;
+
+  // 1. Find the matching job. The worker persists input.task_id, so we can
+  //    query directly instead of scanning the last 50 rows (which could miss
+  //    the job under load). Fall back to the scan only if the direct filter
+  //    errors (older rows may predate task_id persistence).
+  let matched = await findJobByTaskId(provider, taskId);
   if (!matched) {
     console.warn(`[Webhook] No matching job for ${provider} task ${taskId}`);
     return { ok: true, message: "No matching job — acknowledged" };
@@ -101,50 +163,21 @@ async function handleCompletion(params: CompletionParams): Promise<{ ok: boolean
       }
     }
 
-    // Mark job ready
-    await supabaseAdmin
-      .from("processing_jobs")
-      .update({
-        status: "ready",
-        completed_at: now,
-        output: { model_id: taskId, glb_url: finalGlb, usdz_url: finalUsdz, thumbnail_url: finalThumb, polygon_count: polygonCount },
-        updated_at: now,
-      })
-      .eq("id", matched.id);
+    // CAS-complete the job. If the worker's poll loop already marked it ready,
+    // skip the duplicate email and report it.
+    const claimed = await markJobCompleted(matched.id, taskId, finalGlb, finalUsdz, finalThumb, polygonCount);
+    console.log(`[Webhook] Job ${matched.id} completed via ${provider}${claimed ? "" : " (already completed by another path)"}`);
 
-    console.log(`[Webhook] Job ${matched.id} completed via ${provider}`);
-
-    // Send model-ready notification to the product owner
-    try {
-      const { data: product } = await supabaseAdmin
-        .from("products")
-        .select("title, merchant_id")
-        .eq("id", matched.product_id)
-        .single();
-
-      if (product?.merchant_id) {
-        const { data: ownerProfile } = await supabaseAdmin
-          .from("business_profiles")
-          .select("business_email, representative_name")
-          .eq("id", matched.business_id ?? matched.merchant_id)
-          .maybeSingle();
-
-        if (ownerProfile?.business_email) {
-          sendModelReadyEmail({
-            data: {
-              email: ownerProfile.business_email,
-              name: ownerProfile.representative_name ?? "Merchant",
-              productName: product.title,
-              productId: matched.product_id,
-            },
-          }).catch((err) => {
-            console.error("[Webhook] Failed to send model-ready email", err);
-          });
-        }
-      }
-    } catch (emailErr) {
-      console.error("[Webhook] Failed to resolve owner for email notification", emailErr);
+    if (!claimed) {
+      return { ok: true, message: `Job ${matched.id} already completed` };
     }
+
+    // Send model-ready notification to the product owner (once — we won the CAS).
+    await notifyModelReady({
+      productId: matched.product_id,
+      merchantId: matched.merchant_id,
+      businessId: matched.business_id,
+    });
 
     return { ok: true, message: `Job ${matched.id} completed` };
   }
@@ -153,9 +186,11 @@ async function handleCompletion(params: CompletionParams): Promise<{ ok: boolean
   const retries = matched.retries ?? 0;
   const maxRetries = matched.max_retries ?? 5;
   const fail = retries >= maxRetries;
-  const nextDelay = Math.pow(2, retries) * 1000;
+  const nextDelay = Math.pow(2, retries) * 1000 + Math.round(Math.random() * 1000);
 
-  await supabaseAdmin
+  // CAS update: only transition from an in-flight status. If the worker's
+  // poll path already resolved the job, don't touch it (and don't re-refund).
+  const { data: failedUpdated, error: updateError } = await supabaseAdmin
     .from("processing_jobs")
     .update({
       status: fail ? "failed" : "queued",
@@ -164,7 +199,36 @@ async function handleCompletion(params: CompletionParams): Promise<{ ok: boolean
       error: errorMessage ?? `${provider} task ${status}`,
       updated_at: now,
     })
-    .eq("id", matched.id);
+    .eq("id", matched.id)
+    .in("status", ["processing", "optimizing"])
+    .select("id")
+    .maybeSingle();
+
+  if (updateError) {
+    console.error(`[Webhook] Failed to update job ${matched.id} after ${status}:`, updateError.message);
+  }
+
+  const claimedFailure = Boolean(failedUpdated?.id);
+
+  // Refund the credit when a billed job exhausts its retries — only if we
+  // actually transitioned it (avoids double refunds when the worker's poll
+  // path already failed it).
+  if (fail && claimedFailure) {
+    const input = matched.input as Record<string, unknown>;
+    if (input?.billed === true) {
+      try {
+        await supabaseAdmin.rpc("add_credits", {
+          _merchant_id: matched.merchant_id,
+          _amount: 1,
+          _reason: "processing_job_refund",
+          _ref_id: matched.id,
+        });
+        console.log(`[Webhook] Refunded 1 credit for permanently failed job ${matched.id}`);
+      } catch (refundErr) {
+        console.error(`[Webhook] Refund failed for job ${matched.id}:`, refundErr instanceof Error ? refundErr.message : refundErr);
+      }
+    }
+  }
 
   console.log(`[Webhook] Job ${matched.id} ${status} — ${fail ? "permanently failed" : `retry ${retries + 1}/${maxRetries}`}`);
   return { ok: true, message: `Job ${matched.id} ${status}` };
@@ -239,3 +303,82 @@ export const handleTripoWebhook = createServerFn({ method: "POST" })
       errorMessage: data.data.message,
     });
   });
+
+// ---------------------------------------------------------------------------
+// Raw HTTP request handlers — mounted in src/server.ts so provider callbacks
+// to /api/webhooks/meshy and /api/webhooks/tripo actually resolve.
+// ---------------------------------------------------------------------------
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8" },
+  });
+}
+
+async function parseJsonRequest(request: Request): Promise<{ ok: boolean; payload: unknown; error?: string }> {
+  if (request.method !== "POST") {
+    return { ok: false, payload: null, error: "Method not allowed" };
+  }
+  const rawBody = await request.text();
+  try {
+    return { ok: true, payload: JSON.parse(rawBody) };
+  } catch {
+    return { ok: false, payload: null, error: "Invalid JSON" };
+  }
+}
+
+export async function handleMeshyWebhookRequest(request: Request): Promise<Response> {
+  const parsed = await parseJsonRequest(request);
+  if (!parsed.ok) {
+    return jsonResponse({ error: parsed.error }, parsed.error === "Invalid JSON" ? 400 : 405);
+  }
+  try {
+    const data = MeshySchema.parse(parsed.payload);
+    const result = await handleCompletion({
+      provider: "meshy",
+      taskId: data.task_id,
+      status: data.status,
+      glbUrl: data.model_urls?.glb ?? "",
+      usdzUrl: data.model_urls?.usdz ?? "",
+      thumbnailUrl: data.thumbnail_url ?? null,
+      polygonCount: data.polycount ?? null,
+      errorMessage: data.message,
+    });
+    return jsonResponse(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Webhook processing failed";
+    console.error("[MeshyWebhook] Processing failed:", message);
+    return jsonResponse({ error: message }, 400);
+  }
+}
+
+export async function handleTripoWebhookRequest(request: Request): Promise<Response> {
+  const parsed = await parseJsonRequest(request);
+  if (!parsed.ok) {
+    return jsonResponse({ error: parsed.error }, parsed.error === "Invalid JSON" ? 400 : 405);
+  }
+  try {
+    const data = TripoSchema.parse(parsed.payload);
+    const statusMap: Record<string, "SUCCEEDED" | "FAILED" | "EXPIRED"> = {
+      success: "SUCCEEDED",
+      failed: "FAILED",
+      cancelled: "EXPIRED",
+    };
+    const result = await handleCompletion({
+      provider: "tripo",
+      taskId: data.data.task_id,
+      status: statusMap[data.data.status] ?? "FAILED",
+      glbUrl: data.data.output?.model ?? "",
+      usdzUrl: data.data.output?.model ?? "",
+      thumbnailUrl: data.data.output?.rendered_image ?? null,
+      polygonCount: data.data.output?.face_count ?? null,
+      errorMessage: data.data.message,
+    });
+    return jsonResponse(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Webhook processing failed";
+    console.error("[TripoWebhook] Processing failed:", message);
+    return jsonResponse({ error: message }, 400);
+  }
+}
