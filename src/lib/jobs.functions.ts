@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { CREDIT_COSTS } from "@/lib/credits.functions";
 
 const jobStatus = z.enum(["queued", "processing", "optimizing", "ready", "failed"]);
-const jobProvider = z.enum(["meshy", "tripo", "stability"]);
+const jobProvider = z.enum(["meshy", "tripo", "stability", "simulated"]);
 
 export const createProcessingJob = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -55,16 +55,25 @@ export const createProcessingJob = createServerFn({ method: "POST" })
 
 export const getProcessingJobs = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
-  .handler(async ({ context }) => {
-    const { data, error } = await context.supabase
+  .validator((d: unknown) => z.object({
+    product_id: z.string().uuid().optional(),
+  }).optional().parse(d))
+  .handler(async ({ data, context }) => {
+    let query = context.supabase
       .from("processing_jobs")
       .select("*")
       .eq("business_id", context.userId)
       .order("created_at", { ascending: false })
       .limit(50);
-    
+
+    if (data?.product_id) {
+      query = query.eq("product_id", data.product_id);
+    }
+
+    const { data: jobs, error } = await query;
+
     if (error) throw error;
-    return data ?? [];
+    return jobs ?? [];
   });
 
 export const processJob = createServerFn({ method: "POST" })
@@ -120,25 +129,6 @@ async function startJob(jobId: string, merchantId: string) {
     .update({
       status: "processing",
       started_at: now.toISOString(),
-      updated_at: now.toISOString(),
-    })
-    .eq("id", jobId)
-    .eq("merchant_id", merchantId)
-    .select()
-    .single();
-  
-  if (error) throw error;
-  return data;
-}
-
-async function completeJob(jobId: string, merchantId: string, result: any) {
-  const now = new Date();
-  const { data, error } = await supabaseAdmin
-    .from("processing_jobs")
-    .update({
-      status: "ready",
-      completed_at: now.toISOString(),
-      result: result,
       updated_at: now.toISOString(),
     })
     .eq("id", jobId)
@@ -244,28 +234,24 @@ export const requeueDeadLetterJob = createServerFn({ method: "POST" })
     
     if (error) throw error;
     if (!job) throw new Error("Job not found");
-    
-    if (job.retries < job.max_retries) {
-      const nextRetryDelay = Math.pow(2, job.retries) * 1000;
-      const nextRetryAt = new Date(Date.now() + nextRetryDelay);
-      
-      const { data: updated, error: updateError } = await supabaseAdmin
-        .from("processing_jobs")
-        .update({
-          status: "queued",
-          retries: job.retries + 1,
-          next_retry_at: nextRetryAt.toISOString(),
-          error: null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", data.job_id)
-        .eq("merchant_id", merchantId)
-        .select()
-        .single();
-      
-      if (updateError) throw updateError;
-      return updated;
-    } else {
-      throw new Error("Max retries exceeded");
-    }
+
+    // Dead letters have retries >= max_retries by definition, so the old
+    // `retries < max_retries` guard could never pass. Requeueing is an
+    // explicit admin rescue: reset the retry budget and put it back in line.
+    const { data: updated, error: updateError } = await supabaseAdmin
+      .from("processing_jobs")
+      .update({
+        status: "queued",
+        retries: 0,
+        next_retry_at: new Date(Date.now() + 30_000).toISOString(),
+        error: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.job_id)
+      .eq("merchant_id", merchantId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+    return updated;
   });
